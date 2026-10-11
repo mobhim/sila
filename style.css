@@ -78,7 +78,7 @@ h1{margin:0 0 14px;font-family:var(--f-display);font-style:italic;font-weight:40
 .hero{--hbg:#B06E3C;--px:0%;position:relative;isolation:isolate;overflow:hidden;border-radius:28px;height:760px;scroll-margin-top:84px;
   background:#150E0C;color:#F6EDE3;outline:1px solid #D6B08C2E;outline-offset:-1px}
 /* the silk: one photo that drifts slowly and slides a little with every room, under a tint that cross-fades */
-.hero::before{content:"";position:absolute;inset:-6% -8%;z-index:-2;background:#150E0C url("../img/silk.jpg") 50% 74%/cover no-repeat;
+.hero::before{content:"";position:absolute;inset:-6% -8%;z-index:-2;background:#150E0C url("silk.jpg") 50% 74%/cover no-repeat;
   translate:var(--px) 0;transition:translate 1.8s var(--land);animation:silk 28s ease-in-out infinite alternate;will-change:transform,translate}
 @keyframes silk{from{transform:scale(1.02)}to{transform:scale(1.1) rotate(.7deg)}}
 .hero::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-color:var(--hbg);mix-blend-mode:soft-light;opacity:.6;transition:background-color 1.5s var(--ease)}

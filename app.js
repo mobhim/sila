@@ -9,10 +9,10 @@
 
   /* room types, each with its real photo (published beside the page) */
   const CATS = [                                   // bg = the warmth laid over the silk, dot = the room's mark on the board
-    { key: 'ستاندر', bg: '#9A8262', dot: '#D9C09A', photo: 'img/standard.jpg', pos: '50% 66%' },
-    { key: 'غرفة عائلية', bg: '#8E5F5A', dot: '#C9A19B', photo: 'img/family.jpg', pos: '50% 72%' },
-    { key: 'جناح ملكي', bg: '#A06C44', dot: '#C98A54', photo: 'img/royal.jpg', pos: '50% 62%' },
-    { key: 'جناح بإطلالة', bg: '#6A5648', dot: '#9C8878', photo: 'img/view.jpg', pos: '50% 60%' }
+    { key: 'ستاندر', bg: '#9A8262', dot: '#D9C09A', photo: 'standard.jpg', pos: '50% 66%' },
+    { key: 'غرفة عائلية', bg: '#8E5F5A', dot: '#C9A19B', photo: 'family.jpg', pos: '50% 72%' },
+    { key: 'جناح ملكي', bg: '#A06C44', dot: '#C98A54', photo: 'royal.jpg', pos: '50% 62%' },
+    { key: 'جناح بإطلالة', bg: '#6A5648', dot: '#9C8878', photo: 'view.jpg', pos: '50% 60%' }
   ];
   const catIdx = cat => Math.max(0, CATS.findIndex(c => c.key === cat));
   function visual(i) { const im = el('img'); im.src = CATS[i].photo; im.alt = ''; im.draggable = false; im.decoding = 'async'; im.style.objectPosition = CATS[i].pos; return im; }
