@@ -9,10 +9,10 @@
 
   /* room types, each with its real photo (published beside the page) */
   const CATS = [                                   // bg = the warmth laid over the silk, dot = the room's mark on the board
-    { key: 'ستاندر', bg: '#9A8262', dot: '#D9C09A', photo: 'standard.jpg', pos: '50% 66%' },
-    { key: 'غرفة عائلية', bg: '#8E5F5A', dot: '#C9A19B', photo: 'family.jpg', pos: '50% 72%' },
-    { key: 'جناح ملكي', bg: '#A06C44', dot: '#C98A54', photo: 'royal.jpg', pos: '50% 62%' },
-    { key: 'جناح بإطلالة', bg: '#6A5648', dot: '#9C8878', photo: 'view.jpg', pos: '50% 60%' }
+    { key: 'ستاندر', bg: '#9A8262', dot: '#D9C09A', photo: 'standard.webp', pos: '50% 66%' },
+    { key: 'غرفة عائلية', bg: '#8E5F5A', dot: '#C9A19B', photo: 'family.webp', pos: '50% 72%' },
+    { key: 'جناح ملكي', bg: '#A06C44', dot: '#C98A54', photo: 'royal.webp', pos: '50% 62%' },
+    { key: 'جناح بإطلالة', bg: '#6A5648', dot: '#9C8878', photo: 'view.webp', pos: '50% 60%' }
   ];
   const catIdx = cat => Math.max(0, CATS.findIndex(c => c.key === cat));
   function visual(i) { const im = el('img'); im.src = CATS[i].photo; im.alt = ''; im.draggable = false; im.decoding = 'async'; im.style.objectPosition = CATS[i].pos; return im; }
@@ -129,6 +129,7 @@
       c.firstChild.style.setProperty('--i', Number(room[i]) || 0);
     });
   }
+  let capKey = '', capT = 0;
   function refreshScene() {                       // caption, suite lighting and the ghost number follow the guest on stage
     const c = CATS[active], me = suites[active];
     suites.forEach(n => n.classList.remove('dim', 'lit'));
@@ -142,6 +143,11 @@
     $('#capName').textContent = c.key;
     $('#capPill').textContent = txt; $('#capPill').className = 'pill-s' + (tone ? ' ' + tone : '');
     $('#capRate').textContent = r ? rateNow(r) + ' ر.س / ليلة' : '';
+    if (capKey !== c.key + '|' + txt) {             // the caption appears when the room or its state changes, then leaves the photo clean
+      capKey = c.key + '|' + txt;
+      const box = $('#capName').closest('.caption'); box.classList.add('show');
+      clearTimeout(capT); capT = setTimeout(() => box.classList.remove('show'), 3400);
+    }
     if (r) setRoll(r.no);
     ghostEl.classList.toggle('idle', !cur);
     const lock = !!cur && !demoOn;
@@ -789,6 +795,7 @@
   });
   document.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!viewer.hidden) { if (e.key === 'Escape') { closeViewer(); e.preventDefault(); } return; }
     const t = e.target;
     if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
     if (/^[0-9]$/.test(e.key)) { userDigit(e.key); e.preventDefault(); }
@@ -807,8 +814,39 @@
   suites.forEach((n, k) => n.addEventListener('click', () => {
     if (Date.now() - swiped < 400) return;
     const d = (k - active + CATS.length) % CATS.length;
-    if (d) browse(d === 3 ? -1 : d);
+    if (d) browse(d === 3 ? -1 : d); else openViewer();
   }));
+  /* a full-screen look at the room in front: tap to zoom in where you tapped, drag to look around, tap again to step back */
+  const viewer = el('div', 'viewer'), vPan = el('div', 'viewer-pan'), vImg = el('img'), vCap = el('div', 'viewer-cap'), vClose = el('button', 'viewer-x');
+  const zoomBtn = el('button', 'zoom-btn');
+  viewer.hidden = true; viewer.dir = 'rtl'; viewer.lang = 'ar'; viewer.setAttribute('role', 'dialog'); viewer.setAttribute('aria-modal', 'true'); viewer.setAttribute('aria-label', 'صورة الغرفة');
+  vImg.alt = ''; vImg.draggable = false;
+  vClose.type = 'button'; vClose.setAttribute('aria-label', 'إغلاق');
+  vClose.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  zoomBtn.type = 'button'; zoomBtn.setAttribute('aria-label', 'عرض صورة الغرفة بملء الشاشة');
+  zoomBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>';
+  vPan.append(vImg); viewer.append(vPan, vCap, vClose); document.body.append(viewer); $('#suites').closest('.scene').append(zoomBtn);
+  let vT = 0, vBack = null;
+  function openViewer() {
+    const c = CATS[active], r = cur ? roomOf(cur) : S.rooms.find(x => x.cat === c.key);
+    vImg.src = c.photo; vImg.style.width = ''; viewer.classList.remove('zoom');
+    vCap.textContent = c.key + (r ? ' · ' + rateNow(r) + ' ر.س / ليلة' : '');
+    vBack = document.activeElement; clearTimeout(vT); viewer.hidden = false; void viewer.offsetWidth; viewer.classList.add('in'); vClose.focus({ preventScroll: true });
+  }
+  function closeViewer() {
+    if (viewer.hidden) return;
+    viewer.classList.remove('in'); vT = setTimeout(() => { viewer.hidden = true; viewer.classList.remove('zoom'); vImg.style.width = ''; }, reduced ? 0 : 420);
+    if (vBack && vBack !== document.body && vBack !== zoomBtn && vBack.isConnected) vBack.focus({ preventScroll: true }); else vClose.blur();   // typing a number right after still goes to the kiosk
+  }
+  zoomBtn.addEventListener('click', openViewer);
+  vClose.addEventListener('click', closeViewer);
+  vPan.addEventListener('click', e => {
+    if (e.target !== vImg) { closeViewer(); return; }
+    if (viewer.classList.contains('zoom')) { viewer.classList.remove('zoom'); vImg.style.width = ''; return; }
+    const r = vImg.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height, Z = 2.4;
+    viewer.classList.add('zoom'); vImg.style.width = Math.round(r.width * Z) + 'px';
+    vPan.scrollLeft = fx * r.width * Z - vPan.clientWidth / 2; vPan.scrollTop = fy * r.height * Z - vPan.clientHeight / 2;
+  });
   const sceneEl = $('#suites').closest('.scene');
   sceneEl.addEventListener('pointerdown', e => { swipe = { x: e.clientX, y: e.clientY }; });
   sceneEl.addEventListener('pointerup', e => {
@@ -1665,6 +1703,10 @@
   const startEvents = location.hash === '#events';
   setSystem(startEvents ? 'events' : 'stay');
   const page = $('#top'), loader = $('#loader');
+  if ('IntersectionObserver' in window) {                // the marquee stops while it is out of view
+    const rest = new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('rest', !e.isIntersecting)), { rootMargin: '120px' });
+    document.querySelectorAll('.footer').forEach(n => rest.observe(n));
+  }
   if (!reduced && 'IntersectionObserver' in window) {   // sections rise softly into view, once
     page.classList.add('rv');
     const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('seen'); io.unobserve(e.target); } }), { threshold: .05, rootMargin: '0px 0px -5% 0px' });
@@ -1673,7 +1715,7 @@
   function start() { loader.classList.add('done'); setTimeout(() => loader.remove(), 600); page.classList.add('in'); if (!reduced && !startEvents) demo(); }
   if (reduced) start();
   else {
-    const WORDS = ['استقبال', 'جاهزية', 'صلة'], t0 = performance.now(), DUR = 2000;
+    const WORDS = ['استقبال', 'جاهزية', 'صلة'], t0 = performance.now(), DUR = 1200;
     let w = 0;
     (function frame(now) {
       const p = Math.min(1, (now - t0) / DUR), n = Math.round(p * 100);
