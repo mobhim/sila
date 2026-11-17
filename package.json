@@ -1,0 +1,16 @@
+﻿{
+  "name": "sila",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sila: a hotel check-in assistant that acts inside permissions the hotel sets",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0"
+  }
+}

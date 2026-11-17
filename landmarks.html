@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>صلة · معالم المدن</title>
+<meta name="description" content="معالم خمس مدن سعودية حول إقامتك: الرياض، جدة، العُلا، أبها، الخبر.">
+<meta name="theme-color" content="#0B4D40">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="preload" as="image" href="landmarks/0-0.jpg" fetchpriority="high">
+<link rel="stylesheet" href="style.css?v=7">
+</head>
+<body data-page="landmarks">
+
+<nav class="nav scrolled" id="nav" dir="rtl" lang="ar" aria-label="التنقل">
+  <div class="wrap nav-in">
+    <a class="logo" href="index.html" aria-label="موقع صلة"><img class="mark" src="logo.svg" alt="" width="38" height="38"><b>صلة</b></a>
+    <span class="nav-set">
+      <a class="nav-link keep" href="index.html">الإقامة</a>
+      <a class="nav-link keep" href="index.html#events">الفعاليات</a>
+      <a class="nav-link keep on" href="landmarks.html" aria-current="page">المعالم</a>
+    </span>
+    <span class="nav-end">
+      <button class="lang" type="button" id="langBtn" lang="en" aria-label="Switch to English">EN</button>
+      <a class="btn-nav" href="index.html">سجّل وصولك ↗</a>
+    </span>
+  </div>
+</nav>
+
+<div class="page" id="top" dir="rtl" lang="ar">
+  <section class="sec lm" id="citySec">
+    <div class="lm-pin">
+      <div class="lm-copy">
+        <h2 data-en="Landmarks <em>around the stay</em>">معالم <em>حول الإقامة</em></h2>
+        <div class="city-tabs" id="cityTabs" role="group" aria-label="المدينة"></div>
+        <div class="lm-now">
+          <h3 id="cityName"></h3>
+          <p id="cityLine"></p>
+        </div>
+        <div class="city-scene" id="cityScene" aria-hidden="true"></div>
+        <ul class="lm-list" id="cityList"></ul>
+      </div>
+      <div class="lm-stage">
+        <div class="lm-stack" id="lmStack"></div>
+        <span class="lm-count" id="lmCount" aria-hidden="true"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="flock" id="flockSec">
+    <div class="flock-title">
+      <div class="flock-copy">
+        <h2 data-en="Five cities on <em>one thread</em>">خمس مدن على <em>خيط واحد</em></h2>
+        <p>طلبات الجولات والسيارات يحوّلها المساعد إلى الكونسيرج، والنزيل لا يحتاج أكثر من أن يكتبها بكلامه.</p>
+      </div>
+    </div>
+    <div class="flock-photos" id="flockPhotos"></div>
+  </section>
+
+  <div class="wrap">
+    <details class="credits">
+      <summary>مصادر صور المعالم</summary>
+      <p>الصور من ويكيميديا كومنز بتراخيص حرة. كل اسم يفتح صفحة الصورة الأصلية.</p>
+      <ul id="lmCredits"></ul>
+    </details>
+  </div>
+
+  <footer class="footer">
+    <div class="wrap foot-bar">
+      <p>صور المعالم حقيقية من ويكيميديا كومنز. أوصافها معلومات عامة، وليست عروضاً أو أسعاراً من الفندق.</p>
+      <a class="foot-link" href="index.html">موقع صلة</a>
+    </div>
+  </footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/InertiaPlugin.min.js"></script>
+<script src="i18n.en.js?v=7"></script>
+<script src="app.js?v=7"></script>
+</body>
+</html>

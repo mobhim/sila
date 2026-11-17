@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>صلة · لوحة الإدارة</title>
+<meta name="theme-color" content="#0B4D40">
+<meta name="sila-api" content="">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css?v=5">
+</head>
+<body data-page="admin">
+<div class="adm" dir="rtl" lang="ar">
+  <aside class="adm-side">
+    <a class="logo" href="index.html" aria-label="موقع صلة"><img class="mark" src="logo.svg" alt="" width="38" height="38"><b>صلة</b></a>
+    <p class="adm-role">لوحة الإدارة</p>
+    <nav class="adm-nav" aria-label="أقسام الإدارة">
+      <button type="button" data-tab="now" aria-pressed="true">الآن<span class="count" id="nowCount" hidden></span></button>
+      <button type="button" data-tab="guests" aria-pressed="false">النزلاء والحجوزات</button>
+      <button type="button" data-tab="rules" aria-pressed="false">التسعير والصلاحيات</button>
+      <button type="button" data-tab="trail" aria-pressed="false">السجل</button>
+    </nav>
+    <div class="adm-foot">
+      <button class="lang" type="button" id="langBtn" lang="en" aria-label="Switch to English">EN</button>
+      <a class="foot-link" href="index.html">موقع النزيل ↗</a>
+    </div>
+  </aside>
+
+  <main class="adm-main">
+    <header class="adm-head">
+      <div>
+        <h1 id="admTitle">الآن</h1>
+        <p class="sub" id="modeNote"></p>
+      </div>
+      <dl class="adm-stats">
+        <div><dt>نزيل سُجّل وصوله</dt><dd id="stIn">0</dd></div>
+        <div><dt>إجراء نفّذه المساعد بنفسه</dt><dd id="stAuto">0</dd></div>
+        <div><dt>حالة وصلت إلى موظف</dt><dd id="stStaff">0</dd></div>
+      </dl>
+    </header>
+    <p class="adm-warn">هذه الصفحة غير محمية بتسجيل دخول في نسخة المحاكاة. أضف مصادقة حقيقية قبل أي تشغيل فعلي.</p>
+
+    <section class="pane" data-pane="now">
+      <div class="adm-grid two">
+        <div class="box">
+          <h2>بانتظار موافقة الموظف</h2>
+          <div class="appr" id="appr"></div>
+          <h2>بلاغات التنظيف والصيانة</h2>
+          <div class="appr" id="tickets"></div>
+        </div>
+        <div class="box">
+          <h2>لوحة الغرف</h2>
+          <p class="cap">اضغط الغرفة لتبديل حالتها: جاهز، قيد التجهيز، صيانة.</p>
+          <div class="rooms" id="rooms"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane" data-pane="guests" hidden>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>النزيل</th><th>الهوية والتواصل</th><th>الغرفة</th><th>الوصول</th><th>الليالي</th><th>الإجمالي</th><th>الدفع والمفتاح</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <form id="addForm" class="box" novalidate>
+        <h2>حجز جديد</h2>
+        <div class="fields">
+          <label class="f">اسم النزيل<input id="fName" autocomplete="off" maxlength="40"></label>
+          <label class="f">رقم الهوية (10 أرقام)<input id="fId" class="ltr" inputmode="numeric" autocomplete="off" maxlength="10"></label>
+          <label class="f">رقم الجوال<input id="fPhone" class="ltr" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="05xxxxxxxx"></label>
+          <label class="f">رقم الغرفة<input id="fRoom" class="ltr" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="تلقائي"></label>
+          <label class="f">عدد الليالي<input id="fNights" class="ltr" inputmode="numeric" autocomplete="off" maxlength="2" value="1"></label>
+          <label class="f">وقت الوصول المتوقع<input id="fEta" class="ltr" type="time" value="15:00"></label>
+          <label class="f">البريد الإلكتروني<input id="fEmail" class="ltr" type="email" autocomplete="off" maxlength="60"></label>
+        </div>
+        <div class="form-end">
+          <button class="big solid" type="submit">إضافة الحجز</button>
+          <p class="msg" id="formMsg" aria-live="polite"></p>
+        </div>
+      </form>
+    </section>
+
+    <section class="pane" data-pane="rules" hidden>
+      <div class="box price-box" id="priceBox">
+        <div class="pb-main">
+          <h2>التسعير حسب الطلب</h2>
+          <p class="cap">السعر يرتفع في المواسم المطلوبة مثل الإجازة الصيفية، وينخفض في الفترات الهادئة، ضمن حدود يضبطها الفندق.</p>
+          <div class="fgroup"><span class="flabel">الفترة</span><div class="togs" id="prPeriods"></div></div>
+          <label class="perm">أقصى تخفيض %<input type="number" id="prMin" min="0" max="60" step="5" inputmode="numeric"></label>
+          <label class="perm">أقصى زيادة %<input type="number" id="prMax" min="0" max="100" step="5" inputmode="numeric"></label>
+        </div>
+        <div class="pb-now">
+          <span class="flabel">تعديل سعر الليلة</span>
+          <b id="prPct"></b>
+          <span class="tag" id="prBy"></span>
+          <p id="prWhy"></p>
+          <button class="pillbtn" id="prAi" type="button" hidden>اطلب من Claude تحديده</button>
+        </div>
+        <div class="pb-rates">
+          <span class="flabel">سعر الليلة الآن</span>
+          <div id="prRates"></div>
+        </div>
+      </div>
+      <div class="box">
+        <h2>صلاحيات المساعد</h2>
+        <p class="cap">ما تُطفئه هنا يتحول إلى طلب موافقة من الموظف.</p>
+        <label class="perm">إعادة إصدار رمز الدخول<input type="checkbox" id="pReissue"></label>
+        <label class="perm">فتح بلاغ صيانة أو تنظيف<input type="checkbox" id="pTicket"></label>
+        <label class="perm">النقل إلى غرفة من نفس الفئة<input type="checkbox" id="pMove"></label>
+        <label class="perm">تأخير المغادرة ساعة<input type="checkbox" id="pLate"></label>
+        <label class="perm">حد التعويض (ر.س)<input type="number" id="pLimit" min="0" max="5000" step="50" inputmode="numeric"></label>
+        <div class="perm fixed ask"><b>بموافقة موظف دائماً</b><span>الاسترجاع الكامل للمبلغ</span></div>
+        <div class="perm fixed never"><b>ممنوع دائماً</b><span>بيانات البطاقات، فتح غرفة لغير صاحب الحجز، تغيير الأسعار</span></div>
+      </div>
+    </section>
+
+    <section class="pane" data-pane="trail" hidden>
+      <div class="adm-grid two">
+        <div class="box">
+          <h2>سجل إجراءات المساعد</h2>
+          <ul class="log" id="log"></ul>
+        </div>
+        <div class="box">
+          <h2>طلبات وصلت لفريق المبيعات</h2>
+          <ul class="log" id="evLeads"></ul>
+        </div>
+      </div>
+      <div class="form-end">
+        <button class="pillbtn" id="resetData" type="button">استعادة البيانات التجريبية</button>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="i18n.en.js?v=5"></script>
+<script src="app.js?v=5"></script>
+</body>
+</html>

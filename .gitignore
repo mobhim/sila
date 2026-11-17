@@ -1,0 +1,15 @@
+# الحزم والأسرار
+node_modules/
+.env
+.env.local
+.vercel/
+
+# ملفات العمل المحلية
+.claude/
+.impeccable/questions/
+.impeccable/mocks/
+.impeccable/review/
+.impeccable/config.local.json
+*.log
+.DS_Store
+Thumbs.db

@@ -4,80 +4,71 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>نظام صلة الفندقي</title>
+<meta name="description" content="صلة: مساعد فندقي يكمل الوصول برقم الهوية أو الجوال، ولا يصدر المفتاح قبل جاهزية الغرفة.">
+<meta name="theme-color" content="#0B4D40">
+<!-- address of the AI server when it is on another host (e.g. https://sila.vercel.app/api/ask); empty = api/ask next to this page -->
+<meta name="sila-api" content="">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
 <link rel="preload" as="image" href="standard.webp" fetchpriority="high">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
-<body>
-<div class="loader" id="loader" aria-hidden="true">
-  <span class="ld-brand">SILA</span>
-  <span class="ld-word" id="ldWord">استقبال</span>
-  <span class="ld-count" id="ldCount">000</span>
-  <div class="ld-bar"><i id="ldBar"></i></div>
-</div>
+<body data-page="site">
 
 <nav class="nav" id="nav" dir="rtl" lang="ar" aria-label="التنقل">
-  <div class="nav-pill">
-    <button class="logo" type="button" data-go="top" aria-label="أعلى الصفحة"><span>ص</span></button>
+  <div class="wrap nav-in">
+    <button class="logo" type="button" data-go="top" aria-label="أعلى الصفحة"><img class="mark" src="logo.svg" alt="" width="38" height="38"><b>صلة</b></button>
     <div class="sys" role="group" aria-label="النظام">
       <button type="button" id="sysStay" aria-pressed="true">الإقامة</button>
       <button type="button" id="sysEvents" aria-pressed="false">الفعاليات</button>
     </div>
-    <i class="hide-m"></i>
     <span class="nav-set" id="navStay">
       <button class="nav-link" type="button" data-go="stage">الشاشة</button>
+      <button class="nav-link" type="button" data-go="limitsSec">الصلاحيات</button>
       <button class="nav-link" type="button" data-go="suitesSec">الغرف</button>
-      <button class="nav-link" type="button" data-go="hotelSec">الفندق</button>
-      <button class="nav-link" type="button" data-go="bookSec">الحجوزات</button>
+      <a class="nav-link keep" href="landmarks.html">المعالم</a>
     </span>
     <span class="nav-set" id="navEvents" hidden>
       <button class="nav-link" type="button" data-go="evStage">المخطِّط</button>
       <button class="nav-link" type="button" data-go="evDoc">العرض التنفيذي</button>
     </span>
-    <i class="hide-m"></i>
-    <button class="nav-cta gr hide-m" type="button" id="navCta">سجّل وصولك ↗</button>
+    <span class="nav-end">
+      <button class="lang" type="button" id="langBtn" lang="en" aria-label="Switch to English">EN</button>
+      <button class="btn-nav" type="button" id="navCta">سجّل وصولك ↗</button>
+    </span>
   </div>
 </nav>
 
-<button class="help-fab" id="helpFab" type="button" aria-expanded="false" aria-controls="helpBox" aria-label="تحدّث مع صلة"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4.5"/></svg></span></button>
+<button class="help-fab" id="helpFab" type="button" aria-expanded="false" aria-controls="helpBox" aria-label="تحدّث مع صلة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4.5"/></svg></button>
 <section class="help-box" id="helpBox" dir="rtl" lang="ar" aria-label="صلة" hidden>
-  <div class="help-head"><span>صلة</span><small id="helpAi" hidden>عبر Claude</small><button type="button" id="helpClose" aria-label="إغلاق">×</button></div>
+  <div class="help-head"><span>صلة</span><small id="helpAi" hidden>عبر Claude</small><button type="button" id="helpClose" aria-label="إغلاق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div class="help-feed" id="helpFeed" aria-live="polite"></div>
   <div class="chips" id="helpChips"></div>
-  <form class="help-form" id="helpForm"><input id="helpInput" maxlength="300" autocomplete="off" placeholder="اكتب طلبك أو رقم هويتك" aria-label="رسالتك"><button class="btn gr" type="submit">إرسال</button></form>
+  <form class="help-form" id="helpForm"><input id="helpInput" maxlength="300" autocomplete="off" placeholder="اكتب طلبك أو رقم هويتك" aria-label="رسالتك"><button class="btn" type="submit">إرسال</button></form>
 </section>
 
 <div class="page" id="top" dir="rtl" lang="ar">
  <div class="view" id="stayView">
   <header class="intro">
-    <p class="kicker blur-in">SILA · HOTEL ASSISTANT</p>
-    <h1 class="reveal">صلة</h1>
-    <p class="role blur-in" style="--d:1">مساعد <em id="role">يفهم طلبات النزيل</em></p>
-    <p class="lede blur-in" style="--d:2">يكمل إجراءات الوصول برقم الهوية أو رقم الجوال، لا يصدر المفتاح قبل جاهزية الجناح، وإذا صارت مشكلة بعد الدفع يحلها في حدود ما يسمح به الفندق.</p>
-    <div class="cta blur-in" style="--d:3">
-      <button class="big solid gr" type="button" id="ctaDemo">شاهد العرض</button>
-      <button class="big out gr" type="button" id="ctaTry">جرّب بنفسك</button>
+    <div class="wrap">
+      <h1 data-en="A hotel assistant that <em id=&quot;role&quot;>understands what guests ask for</em>">مساعد فندقي <em id="role">يفهم طلبات النزيل</em></h1>
+      <p class="lede">يكمل إجراءات الوصول برقم الهوية أو رقم الجوال، لا يصدر المفتاح قبل جاهزية الجناح، وإذا صارت مشكلة بعد الدفع يحلها في حدود ما يسمح به الفندق.</p>
+      <div class="cta">
+        <button class="big solid" type="button" id="ctaDemo">شاهد العرض</button>
+        <button class="big out" type="button" id="ctaTry">جرّب بنفسك</button>
+      </div>
     </div>
+    <svg class="thread" viewBox="0 0 1440 220" preserveAspectRatio="none" aria-hidden="true"><path d="M-20 150 C180 40 330 210 520 120 S860 10 1040 110 1320 190 1460 70" pathLength="1"/></svg>
   </header>
 
+  <div class="wrap">
   <section class="hero" id="stage" data-phase="idle" aria-label="شاشة النزيل">
-    <div class="grain" aria-hidden="true"></div>
-    <span class="tag-brand">SILA</span>
-    <span class="clock" id="clock"></span>
-
-    <div class="scene">
-      <div class="ghost idle" aria-hidden="true"><div class="roll" id="roll"></div></div>
-      <div id="suites" aria-hidden="true"></div>
-      <div class="caption">
-        <button class="arrow" id="prevSuite" type="button" aria-label="الجناح السابق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
-        <div class="cap-text">
-          <span class="cap-name" id="capName"></span>
-          <span class="cap-sub"><span class="pill-s" id="capPill"></span><span id="capRate"></span></span>
-        </div>
-        <button class="arrow" id="nextSuite" type="button" aria-label="الجناح التالي"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
-      </div>
+    <div class="hero-top">
+      <span class="tag-brand">SILA</span>
+      <span class="live-dot">محاكاة حيّة</span>
+      <span class="clock" id="clock"></span>
     </div>
 
     <div class="cardx kiosk">
@@ -89,6 +80,19 @@
       <div class="idline" id="idline" role="img" aria-label="رمز الحجز: رقم الهوية أو الجوال وفي نهايته رقم الغرفة"><span class="idnum" id="idnum"></span><span class="idrm" id="idrm" hidden></span></div>
       <p class="hint" id="hint" aria-live="polite"></p>
       <div class="panel" id="panel"></div>
+    </div>
+
+    <div class="scene">
+      <div id="suites" aria-hidden="true"></div>
+      <div class="ghost idle" aria-hidden="true"><div class="roll" id="roll"></div></div>
+      <div class="caption">
+        <button class="arrow" id="prevSuite" type="button" aria-label="الجناح السابق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+        <div class="cap-text">
+          <span class="cap-name" id="capName"></span>
+          <span class="cap-sub"><span class="pill-s" id="capPill"></span><span id="capRate"></span></span>
+        </div>
+        <button class="arrow" id="nextSuite" type="button" aria-label="الجناح التالي"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+      </div>
     </div>
 
     <div class="cardx assist">
@@ -103,7 +107,7 @@
 
     <div class="bar">
       <button class="demo-btn" id="demoBtn" type="button" aria-pressed="false"><i aria-hidden="true"></i><span>تشغيل العرض</span></button>
-      <button class="demo-btn" id="resetStage" type="button">نزيل جديد</button>
+      <button class="demo-btn plain" id="resetStage" type="button">نزيل جديد</button>
       <ol class="steps" id="steps">
         <li><span>التعريف</span></li>
         <li><span>الطلبات</span></li>
@@ -114,129 +118,70 @@
       </ol>
     </div>
   </section>
+  </div>
+
+  <section class="sec" id="limitsSec">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <h2 data-en="What the assistant does <em>on its own</em>, and what it never does">ما ينفّذه المساعد <em>بنفسه</em>، وما لا يفعله أبداً</h2>
+          <p class="sub">الفندق هو من يرسم الحدود. ما يتجاوزها يتحول إلى طلب موافقة عند الموظف، وكل إجراء يُسجَّل.</p>
+        </div>
+      </div>
+      <ol class="ladder">
+        <li class="lv auto">
+          <b>ينفّذه بنفسه</b>
+          <p>تسجيل الوصول، تحويل كل طلب للقسم المختص، وإصدار رمز الدخول بعد الدفع وجاهزية الغرفة.</p>
+        </li>
+        <li class="lv set">
+          <b>يضبطه الفندق</b>
+          <p>إعادة إصدار رمز الدخول، فتح بلاغ صيانة أو تنظيف، النقل إلى غرفة من نفس الفئة، تأخير المغادرة ساعة، والتعويض ضمن حد يحدده الفندق.</p>
+        </li>
+        <li class="lv ask">
+          <b>بموافقة موظف دائماً</b>
+          <p>الاسترجاع الكامل للمبلغ.</p>
+        </li>
+        <li class="lv never">
+          <b>ممنوع دائماً</b>
+          <p>بيانات البطاقات، فتح غرفة لغير صاحب الحجز، تغيير الأسعار.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
 
   <section class="sec" id="suitesSec">
-    <div class="sec-head">
-      <div>
-        <p class="sec-eye">الغرف والأجنحة</p>
-        <h2>غرف <em>الفندق</em></h2>
-        <p class="sub">اختر نوع الغرفة ليظهر على الشاشة. السعر المعروض هو سعر الليلة بعد تعديل الطلب.</p>
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <h2 data-en="Hotel <em>rooms</em>">غرف <em>الفندق</em></h2>
+          <p class="sub">اختر نوع الغرفة ليظهر على الشاشة. السعر المعروض هو سعر الليلة بعد تعديل الطلب.</p>
+        </div>
       </div>
-    </div>
-    <div class="bento-grid" id="bento"></div>
-  </section>
-
-  <section class="sec" id="hotelSec">
-    <div class="sec-head">
-      <div>
-        <p class="sec-eye">لوحة التحكم</p>
-        <h2>جهة <em>الفندق</em></h2>
-        <p class="sub" id="modeNote"></p>
-      </div>
-      <button class="pillbtn gr" id="resetData" type="button">استعادة البيانات التجريبية</button>
-    </div>
-    <div class="box price-box" id="priceBox">
-      <div class="pb-main">
-        <h3>التسعير حسب الطلب</h3>
-        <p class="cap">السعر يرتفع في المواسم المطلوبة مثل الإجازة الصيفية، وينخفض في الفترات الهادئة، ضمن حدود يضبطها الفندق.</p>
-        <div class="fgroup"><span class="flabel">الفترة</span><div class="togs" id="prPeriods"></div></div>
-        <label class="perm">أقصى تخفيض %<input type="number" id="prMin" min="0" max="60" step="5" inputmode="numeric"></label>
-        <label class="perm">أقصى زيادة %<input type="number" id="prMax" min="0" max="100" step="5" inputmode="numeric"></label>
-      </div>
-      <div class="pb-now">
-        <span class="flabel">تعديل سعر الليلة</span>
-        <b id="prPct"></b>
-        <span class="tag" id="prBy"></span>
-        <p id="prWhy"></p>
-        <button class="pillbtn gr" id="prAi" type="button" hidden>اطلب من Claude تحديده</button>
-      </div>
-      <div class="pb-rates">
-        <span class="flabel">سعر الليلة الآن</span>
-        <div id="prRates"></div>
-      </div>
-    </div>
-    <div class="hotel">
-      <div class="box">
-        <h3>صلاحيات المساعد</h3>
-        <p class="cap">ما تُطفئه هنا يتحول إلى طلب موافقة من الموظف.</p>
-        <label class="perm">إعادة إصدار رمز الدخول<input type="checkbox" id="pReissue"></label>
-        <label class="perm">فتح بلاغ صيانة أو تنظيف<input type="checkbox" id="pTicket"></label>
-        <label class="perm">النقل إلى غرفة من نفس الفئة<input type="checkbox" id="pMove"></label>
-        <label class="perm">تأخير المغادرة ساعة<input type="checkbox" id="pLate"></label>
-        <label class="perm">حد التعويض (ر.س)<input type="number" id="pLimit" min="0" max="5000" step="50" inputmode="numeric"></label>
-        <div class="perm fixed ask"><b>بموافقة موظف دائماً</b><span>الاسترجاع الكامل للمبلغ</span></div>
-        <div class="perm fixed never"><b>ممنوع دائماً</b><span>بيانات البطاقات، فتح غرفة لغير صاحب الحجز، تغيير الأسعار</span></div>
-      </div>
-      <div class="box">
-        <h3>لوحة الغرف</h3>
-        <p class="cap">اضغط الغرفة لتبديل حالتها: جاهز، قيد التجهيز، صيانة.</p>
-        <div class="rooms" id="rooms"></div>
-      </div>
-      <div class="box">
-        <h3>بانتظار موافقة الموظف</h3>
-        <div class="appr" id="appr"></div>
-        <h3>بلاغات التنظيف والصيانة</h3>
-        <div class="appr" id="tickets"></div>
-        <h3>سجل إجراءات المساعد</h3>
-        <ul class="log" id="log"></ul>
-      </div>
-    </div>
-    <div class="stats">
-      <div class="stat"><b id="stAuto">0</b><span>إجراء نفّذه المساعد بنفسه</span></div>
-      <div class="stat"><b id="stStaff">0</b><span>حالة وصلت إلى موظف</span></div>
-      <div class="stat"><b id="stIn">0</b><span>نزيل سُجّل وصوله</span></div>
+      <div class="bento-grid" id="bento"></div>
     </div>
   </section>
-
-  <section class="sec" id="bookSec">
-    <div class="sec-head">
-      <div>
-        <p class="sec-eye">السجل</p>
-        <h2>قائمة <em>الحجوزات</em></h2>
-        <p class="sub">كل حجز مربوط برقم الهوية ورقم الجوال معاً، والنزيل يستخدم أيهما شاء.</p>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>النزيل</th><th>رمز الحجز</th><th>الغرفة</th><th>الوصول</th><th>الليالي</th><th>الإجمالي</th><th>الدفع والمفتاح</th><th></th></tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-    <form id="addForm" novalidate>
-      <h3>حجز جديد</h3>
-      <div class="fields">
-        <label class="f">اسم النزيل<input id="fName" autocomplete="off" maxlength="40"></label>
-        <label class="f">رقم الهوية (10 أرقام)<input id="fId" class="ltr" inputmode="numeric" autocomplete="off" maxlength="10"></label>
-        <label class="f">رقم الجوال<input id="fPhone" class="ltr" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="05xxxxxxxx"></label>
-        <label class="f">رقم الغرفة<input id="fRoom" class="ltr" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="تلقائي"></label>
-        <label class="f">عدد الليالي<input id="fNights" class="ltr" inputmode="numeric" autocomplete="off" maxlength="2" value="1"></label>
-        <label class="f">وقت الوصول المتوقع<input id="fEta" class="ltr" type="time" value="15:00"></label>
-        <label class="f">البريد الإلكتروني<input id="fEmail" class="ltr" type="email" autocomplete="off" maxlength="60"></label>
-      </div>
-      <div><button class="big solid gr" type="submit">إضافة الحجز</button></div>
-      <p class="msg" id="formMsg" aria-live="polite"></p>
-    </form>
-  </section>
-
  </div>
 
  <div class="view" id="eventsView" hidden>
   <header class="intro">
-    <p class="kicker">SILA · EVENTS</p>
-    <h1>فعاليتك</h1>
-    <p class="role">عرض تنفيذي كامل <em>خلال ثوانٍ</em></p>
-    <p class="lede">اكتب فعاليتك بكلامك أو عبّئ النموذج، والمحرّك يختار القاعة وترتيبها، يقترح قائمة الطعام، يحسب ثلاث باقات، ويبني الجدول الزمني.</p>
+    <div class="wrap">
+      <h1 data-en="Your event, as a full proposal <em>in seconds</em>">فعاليتك في عرض تنفيذي كامل <em>خلال ثوانٍ</em></h1>
+      <p class="lede">اكتب فعاليتك بكلامك أو عبّئ النموذج، والمحرّك يختار القاعة وترتيبها، يقترح قائمة الطعام، يحسب ثلاث باقات، ويبني الجدول الزمني.</p>
+    </div>
+    <svg class="thread" viewBox="0 0 1440 220" preserveAspectRatio="none" aria-hidden="true"><path d="M-20 150 C180 40 330 210 520 120 S860 10 1040 110 1320 190 1460 70" pathLength="1"/></svg>
   </header>
 
+  <div class="wrap">
   <section class="hero ev-hero" id="evStage" aria-label="مخطِّط الفعاليات">
-    <div class="grain" aria-hidden="true"></div>
-    <span class="tag-brand">SILA · EVENTS</span>
-    <span class="clock" id="evNo"></span>
+    <div class="hero-top">
+      <span class="tag-brand">SILA · EVENTS</span>
+      <span class="clock" id="evNo"></span>
+    </div>
 
     <div class="cardx ev-form">
       <div class="assist-head"><span>صف فعاليتك</span><small id="evAiTag" hidden>يفهم الكلام عبر Claude</small></div>
       <textarea class="ta short" id="evBrief" maxlength="400" placeholder="مثال: مؤتمر تقني لـ 200 شخص، ميزانية 90 ألف، شاشتان وبوفيه مع خيارات نباتية"></textarea>
-      <div class="row"><button class="btn gr" id="evParse" type="button">املأ النموذج عني</button></div>
+      <div class="row"><button class="btn" id="evParse" type="button">املأ النموذج عني</button></div>
       <p class="hint" id="evHint" aria-live="polite">أو عبّئ النموذج مباشرة، والعرض يتحدّث مع كل تغيير.</p>
       <div class="fgroup"><span class="flabel">طبيعة الفعالية</span><div class="togs" id="evTypes"></div></div>
       <div class="fgrid">
@@ -254,13 +199,13 @@
     </div>
 
     <div class="ev-center">
-      <div class="ghost ev-ghost" id="evGhost" aria-hidden="true"></div>
-      <div class="frame ev-plan" id="evPlan" role="img" aria-label="مخطط القاعة"></div>
+      <div class="ev-count"><b id="evGhost"></b><span>حاضراً</span></div>
+      <div class="ev-plan" id="evPlan" role="img" aria-label="مخطط القاعة"></div>
       <div class="cap-text">
         <span class="cap-name" id="evHall"></span>
         <span class="cap-sub"><span class="pill-s" id="evLayout"></span><span id="evCap"></span></span>
       </div>
-      <button class="big solid gr" id="evGo" type="button">أصدر العرض التنفيذي</button>
+      <button class="big solid" id="evGo" type="button">أصدر العرض التنفيذي</button>
       <ol class="steps ev-steps" id="evSteps">
         <li><span>القاعة</span></li><li><span>القائمة</span></li><li><span>التسعير</span></li><li><span>الجدول</span></li><li><span>الملف</span></li>
       </ol>
@@ -273,40 +218,43 @@
       <p class="hint" id="evAdvice"></p>
     </div>
   </section>
+  </div>
 
   <section class="sec" id="evDoc">
-    <div class="sec-head">
-      <div>
-        <p class="sec-eye">ملف العرض</p>
-        <h2>العرض <em>التنفيذي</em></h2>
-        <p class="sub" id="evDocSub"></p>
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <h2 data-en="The <em>proposal</em>">العرض <em>التنفيذي</em></h2>
+          <p class="sub" id="evDocSub"></p>
+        </div>
+        <div class="doc-acts">
+          <button class="big solid" id="evPdf" type="button">حفظ PDF</button>
+          <button class="big out" id="evTour" type="button">حجز جولة استكشافية</button>
+          <button class="big out" id="evSales" type="button">تواصل مع المبيعات</button>
+        </div>
       </div>
-      <div class="doc-acts">
-        <button class="big solid gr" id="evPdf" type="button">حفظ PDF</button>
-        <button class="big out gr" id="evTour" type="button">حجز جولة استكشافية</button>
-        <button class="big out gr" id="evSales" type="button">تواصل مع المبيعات</button>
+      <p class="msg" id="evMsg" aria-live="polite"></p>
+      <div class="doc-grid">
+        <div class="box span7"><h3>مخطط القاعة</h3><div class="plan-big" id="evPlanBig" role="img" aria-label="مخطط القاعة مكبّراً"></div><p class="cap" id="evLegend"></p></div>
+        <div class="box span5"><h3>التسعير بالتفصيل</h3><div class="pwrap"><table class="price" id="evPrice"></table></div><p class="cap">أسعار تجريبية. العمود الملوّن هو الباقة المختارة.</p></div>
+        <div class="box span5"><h3 id="evMenuTitle">قائمة الطعام</h3><div class="menu" id="evMenu"></div></div>
+        <div class="box span7"><h3>الجدول الزمني</h3><ol class="agenda" id="evAgenda"></ol></div>
       </div>
+      <div class="pdf-strip" id="evPages" hidden></div>
     </div>
-    <p class="msg" id="evMsg" aria-live="polite"></p>
-    <div class="doc-grid">
-      <div class="box span7"><h3>مخطط القاعة</h3><div class="plan-big" id="evPlanBig" role="img" aria-label="مخطط القاعة مكبّراً"></div><p class="cap" id="evLegend"></p></div>
-      <div class="box span5"><h3>التسعير بالتفصيل</h3><div class="pwrap"><table class="price" id="evPrice"></table></div><p class="cap">أسعار تجريبية. العمود الملوّن هو الباقة المختارة.</p></div>
-      <div class="box span5"><h3 id="evMenuTitle">قائمة الطعام</h3><div class="menu" id="evMenu"></div></div>
-      <div class="box span7"><h3>الجدول الزمني</h3><ol class="agenda" id="evAgenda"></ol></div>
-    </div>
-    <div class="pdf-strip" id="evPages" hidden></div>
-    <div class="box"><h3>طلبات وصلت لفريق المبيعات</h3><ul class="log" id="evLeads"></ul></div>
   </section>
  </div>
 
   <footer class="footer">
-    <div class="marq" aria-hidden="true"><div id="marq"></div></div>
-    <div class="foot-bar">
+    <div class="wrap foot-bar">
       <span class="live">محاكاة تعمل داخل الصفحة</span>
       <p>ليست نظاماً تشغيلياً: لا يُخصم مبلغ، لا تُرسل رسائل، ولا يُفتح باب. البيانات تُحفظ في هذا المتصفح فقط.</p>
+      <a class="foot-link" href="landmarks.html">معالم المدن</a>
+      <a class="foot-link" href="admin.html">لوحة الإدارة</a>
     </div>
   </footer>
 </div>
-<script src="app.js"></script>
+<script src="i18n.en.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
