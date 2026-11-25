@@ -48,7 +48,7 @@ export const replenishment = {
     system: "النظام",
     autoPolicy: "سياسة الشراء الآلي",
     autoCreated: "أُنشئ تلقائياً من تنبيه مخزون",
-    noteAdded: "تحديث من المورد",
+    noteAdded: "تحديث وملاحظة",
     calc: {
       how: "كيف حُسبت؟", available: "المتاح", onOrder: "قيد الطلب", min: "الحد الأدنى", max: "الحد الأعلى", adc: "متوسط الاستهلاك",
       lead: "مدة توريد المورد", review: "فترة المراجعة", safety: "مخزون الأمان", cover: "تغطية الطلب", target: "المستوى المستهدف",
@@ -119,7 +119,7 @@ export const replenishment = {
     system: "System",
     autoPolicy: "Automated purchasing policy",
     autoCreated: "Created automatically from a stock alert",
-    noteAdded: "Supplier update",
+    noteAdded: "Update note",
     calc: {
       how: "How was this calculated?", available: "Available", onOrder: "On order", min: "Minimum", max: "Maximum", adc: "Avg. consumption",
       lead: "Supplier lead time", review: "Review period", safety: "Safety stock", cover: "Demand cover", target: "Target level",

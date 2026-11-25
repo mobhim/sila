@@ -1,3 +1,4 @@
+import { orNotFound } from "@/server/page";
 import Link from "next/link";
 import { Printer } from "lucide-react";
 import { requireActor } from "@/server/auth/current";
@@ -20,7 +21,7 @@ export const metadata = { title: "Replenishment request" };
 export default async function ReplenishmentDetail({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireActor("replenishment.view");
   const { id } = await params;
-  const { req, users, events } = await getRequest(actor, id);
+  const { req, users, events } = await orNotFound(getRequest(actor, id));
   const f = await getFmt();
   const { t, locale } = f;
   const userName = (uid: string | null | undefined) => (uid ? users.find((u) => u.id === uid)?.name ?? "—" : "—");
@@ -253,7 +254,7 @@ export default async function ReplenishmentDetail({ params }: { params: Promise<
               <Timeline
                 items={events.map((e) => ({
                   id: e.id,
-                  title: e.fromStatus === e.toStatus ? t("replenishment.noteAdded") : t(`enums.replenishment.${e.toStatus}`),
+                  title: e.fromStatus === e.toStatus && e.toStatus !== "PARTIALLY_RECEIVED" ? t("replenishment.noteAdded") : t(`enums.replenishment.${e.toStatus}`),
                   meta: `${e.userId ? userName(e.userId) : t("replenishment.system")} · ${f.dateTime(e.createdAt)}`,
                   note: e.note === "auto" ? t("replenishment.autoCreated") : e.note,
                 }))}

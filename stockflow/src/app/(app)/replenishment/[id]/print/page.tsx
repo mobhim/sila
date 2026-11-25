@@ -1,3 +1,4 @@
+import { orNotFound } from "@/server/page";
 import { requireActor } from "@/server/auth/current";
 import { getRequest } from "@/server/replenishment";
 import { getSettings } from "@/server/settings";
@@ -13,7 +14,7 @@ export const metadata = { title: "Purchase order" };
 export default async function PrintPurchaseOrder({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireActor("replenishment.view");
   const { id } = await params;
-  const { req, users } = await getRequest(actor, id);
+  const { req, users } = await orNotFound(getRequest(actor, id));
   const settings = await getSettings();
   const f = await getFmt();
   const { t, locale } = f;

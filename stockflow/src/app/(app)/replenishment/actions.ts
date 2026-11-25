@@ -5,12 +5,11 @@ import {
   addRequestDocument, approveRequest, cancelRequest, closeRequest, createRequest, receiveRequest, sendToSupplier, submitRequest, updateRequest,
 } from "@/server/replenishment";
 import { zIdOpt, zOpt } from "@/lib/form";
-import { parseDay, qtyLines, zItems } from "@/components/procurement/parse";
+import { qtyLines, zItems } from "@/components/procurement/parse";
 import { AppError } from "@/server/errors";
 
 const id = (fd: FormData) => z.string().min(1).max(64).parse(fd.get("id"));
 const reval = ["/replenishment", "/dashboard", "/alerts"];
-void parseDay;
 
 export async function createRequestAction(_p: ActionResult<string> | null, fd: FormData): Promise<ActionResult<string>> {
   return act(async (actor) => {

@@ -26,13 +26,13 @@ interface Driver {
 
 const localDriver: Driver = {
   async put(key, data) {
-    const dir = path.resolve(process.env.UPLOAD_DIR || "./.uploads");
+    const dir = path.resolve(/* turbopackIgnore: true */ process.cwd(), process.env.UPLOAD_DIR || ".uploads");
     await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, key), data, { mode: 0o600 });
+    await writeFile(path.join(/* turbopackIgnore: true */ dir, key), data, { mode: 0o600 });
   },
   async get(key) {
-    const dir = path.resolve(process.env.UPLOAD_DIR || "./.uploads");
-    const p = path.join(dir, key);
+    const dir = path.resolve(/* turbopackIgnore: true */ process.cwd(), process.env.UPLOAD_DIR || ".uploads");
+    const p = path.join(/* turbopackIgnore: true */ dir, key);
     if (!p.startsWith(dir + path.sep)) throw new AppError("not_found", {}, 404);
     return readFile(p);
   },

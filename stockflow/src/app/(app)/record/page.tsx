@@ -1,10 +1,9 @@
 import { requireActor } from "@/server/auth/current";
 import { db } from "@/server/db";
 import { getSelectedBranch } from "@/server/branch-selection";
-import { branchOptions } from "@/server/branches";
+import { branchOptions, defaultBranchFor } from "@/server/branches";
 import { allowedTypes } from "@/server/movements";
 import { productForRecording } from "@/server/inventory/queries";
-import { workingBranch } from "@/server/rbac";
 import { getT } from "@/i18n/server";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { RecordScreen } from "./record-screen";
@@ -19,7 +18,7 @@ export default async function RecordPage({ searchParams }: { searchParams: Promi
   const selected = await getSelectedBranch(actor);
   let branchId: string;
   try {
-    branchId = workingBranch(actor, sp.branch || selected);
+    branchId = await defaultBranchFor(actor, sp.branch || selected);
   } catch {
     return <EmptyState title={t("errors.no_branch_assigned")} />;
   }

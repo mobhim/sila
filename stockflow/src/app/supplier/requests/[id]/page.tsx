@@ -1,3 +1,4 @@
+import { orNotFound } from "@/server/page";
 import { requireActor } from "@/server/auth/current";
 import { getRequest } from "@/server/replenishment";
 import { getFmt } from "@/i18n/server";
@@ -16,7 +17,7 @@ export const metadata = { title: "Request" };
 export default async function SupplierRequest({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireActor("supplier.portal");
   const { id } = await params;
-  const { req, events } = await getRequest(actor, id);
+  const { req, events } = await orNotFound(getRequest(actor, id));
   const f = await getFmt();
   const { t, locale } = f;
   const total = req.items.reduce((s, i) => s + num(i.requestedQty) * num(i.unitCost), 0);
@@ -140,10 +141,10 @@ export default async function SupplierRequest({ params }: { params: Promise<{ id
             <CardBody>
               <Timeline items={events.filter((e) => e.fromStatus === e.toStatus || ["SENT_TO_SUPPLIER", "ACCEPTED", "IN_TRANSIT", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED", "DECLINED", "CLOSED_SHORT"].includes(e.toStatus)).map((e) => ({
                 id: e.id,
-                title: e.fromStatus === e.toStatus ? t("replenishment.noteAdded") : t(`enums.replenishment.${e.toStatus}`),
+                title: e.fromStatus === e.toStatus && e.toStatus !== "PARTIALLY_RECEIVED" ? t("replenishment.noteAdded") : t(`enums.replenishment.${e.toStatus}`),
                 meta: f.dateTime(e.createdAt),
                 // Internal notes (approvals, cancellations) are the business's; show only supplier-facing ones.
-                note: ["ACCEPTED", "IN_TRANSIT", "DECLINED", "CANCELLED"].includes(e.toStatus) || e.fromStatus === e.toStatus ? e.note : null,
+                note: ["ACCEPTED", "IN_TRANSIT", "DECLINED", "CANCELLED"].includes(e.toStatus) || (e.fromStatus === e.toStatus && e.toStatus !== "PARTIALLY_RECEIVED") ? e.note : null,
               }))} />
             </CardBody>
           </Card>

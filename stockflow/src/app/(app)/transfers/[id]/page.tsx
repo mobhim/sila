@@ -1,3 +1,4 @@
+import { orNotFound } from "@/server/page";
 import Link from "next/link";
 import { requireActor } from "@/server/auth/current";
 import { can, hasBranchAccess } from "@/server/rbac";
@@ -16,7 +17,7 @@ export const metadata = { title: "Transfer" };
 export default async function TransferDetail({ params }: { params: Promise<{ id: string }> }) {
   const actor = await requireActor("transfers.view");
   const { id } = await params;
-  const { transfer: tr, events, users, sourceStock } = await getTransfer(actor, id);
+  const { transfer: tr, events, users, sourceStock } = await orNotFound(getTransfer(actor, id));
   const f = await getFmt();
   const { t, locale } = f;
   const userName = (uid: string | null | undefined) => (uid ? users.find((u) => u.id === uid)?.name ?? "—" : "—");
