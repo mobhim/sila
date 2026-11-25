@@ -43,6 +43,8 @@ npm start
 | متغير | الغرض | الافتراضي |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | مفتاح Claude | — |
+| `SILA_LLM_KEY` | مفتاح مجاني بديل عن Claude: من Groq (`gsk_`) أو Google AI Studio (`AIza`). يُستخدم إذا لم يوجد مفتاح Claude | — |
+| `SILA_LLM_MODEL` / `SILA_LLM_URL` | تحديد النموذج أو عنوان أي خدمة متوافقة مع OpenAI | يُختار تلقائياً |
 | `SILA_MODEL` | النموذج | `claude-opus-5-5` |
 | `SILA_RATE_PER_MIN` | حد الطلبات لكل عنوان في الدقيقة | 30 |
 | `SILA_DAILY_CAP` | حد الطلبات اليومي | 3000 |

@@ -366,7 +366,8 @@
   } else if (location.protocol !== 'file:') {
     /* outside the Claude page the same calls go to the site's own server (api/ask), which holds the API key and the prompts.
        The server is given the task name and the raw input only; a static host without it leaves the page on its written rules. */
-    const API = ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim() || 'api/ask';
+    const API = ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim()
+      || (/\.github\.io$/.test(location.hostname) ? 'https://sila-kappa.vercel.app/api/ask' : 'api/ask');       // GitHub Pages has no server: it uses the copy on Vercel
     const remote = {
       async json(prompt, opts, task, input) {
         const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
