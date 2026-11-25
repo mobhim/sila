@@ -951,5 +951,13 @@ window.SILA_EN = {
   "اسأل أو اطلب أي شيء، في أي وقت": "Ask or request anything, at any time",
   "رسالتك للمساعد": "Your message to the assistant",
   "كل خطوة للوكيل كما جرت: ما فهمه، الأداة التي اختارها، قرار محرّك الصلاحيات، والنتيجة.": "Every step the agent took, as it happened: what it understood, the tool it chose, the permission engine’s decision and the result.",
-  "تصدير السجل (JSON)": "Export the log (JSON)"
+  "تصدير السجل (JSON)": "Export the log (JSON)",
+  /* partner sync */
+  "حدّث نظام الفندق غرفتك إلى الجناح {room}.": "The hotel’s system changed your room to suite {room}.",
+  "متصل بنظام الشريك": "Connected to the partner system",
+  "الشريك مفصول: صلة تكمل ببياناتها": "Partner disconnected: Sila carries on with its own data",
+  " عملية تنتظر": " operation(s) waiting",
+  "لا مزامنة بعد. ما يُرسل للشريك وما يُستقبل منه يظهر هنا.": "No sync yet. What is sent to the partner and what is received from it shows up here.",
+  "المزامنة مع نظام الشريك": "Sync with the partner system",
+  "افتح نظام الشريك ↗": "Open the partner system ↗"
 };

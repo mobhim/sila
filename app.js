@@ -441,7 +441,8 @@
       c.addEventListener('click', () => {
         const no = r.no; if (demoOn) takeOver();
         const rr = S.rooms.find(x => x.no === no); if (!rr) return;
-        const next = NEXT[rr.state]; setRoomState(no, next); log(__('الجناح ') + no + __(' صار: ') + STATE[next], 'staff');
+        const from = rr.state, next = NEXT[from]; setRoomState(no, next); log(__('الجناح ') + no + __(' صار: ') + STATE[next], 'staff');
+        partnerSend('room_state', null, { room: no, from, to: next });
       });
       roomsEl.append(c);
     });
@@ -491,6 +492,7 @@
         const oldRoom = roomOf(bb);
         if (!S.rooms.some(r => r.no === v)) S.rooms.push({ no: v, cat: oldRoom ? oldRoom.cat : CATS[0].key, rate: oldRoom ? oldRoom.rate : 600, state: 'ready' });
         const old = bb.room; bb.room = v; save(); renderRooms(); renderRows(); refreshScene();
+        partnerSend('room_change', bb, { from: old, to: v });
         say(__('نُقل ') + bb.name + __(' من الغرفة ') + old + __(' إلى ') + v + __('، وتحدّث رمز الحجز تلقائياً.'), 'ok');
       });
       roomTd.append(roomIn);
@@ -533,7 +535,7 @@
     adopt(fresh);
     if (S !== store) return;                      // the film is playing on its own copy; the real data waits behind it
     renderHotel(); refreshScene();
-    Object.keys(waiters).forEach(no => { const r = store.rooms.find(x => x.no === no); if (r && r.state === 'ready') { const go = waiters[no]; delete waiters[no]; go(); } });
+    wakeWaiters(); stageRefresh();
     let heard = false;
     Object.keys(pendingAppr).forEach(aid => {
       if (!(aid in store.decided)) return;
@@ -542,21 +544,75 @@
     if (heard) save();
   });
   function renderHotel() {
-    renderPerms(); renderPricing(); renderRooms(); renderLog(); renderTrail(); renderAppr(); renderTickets(); renderRows();
+    renderPerms(); renderPricing(); renderRooms(); renderLog(); renderTrail(); renderSync(); renderAppr(); renderTickets(); renderRows();
     $('#modeNote').textContent = S === store ? __('التسعير، صلاحيات المساعد، حالة الغرف، وكل ما نفّذه. البيانات تجريبية ومحفوظة في متصفحك.') : __('التسعير، صلاحيات المساعد، حالة الغرف، وكل ما نفّذه. العرض يعمل على نسخة مؤقتة تُعاد كل جولة.');
   }
 
+  const AG = window.SILA, RULES = AG.brains.rules;
   /* the optional model brain (agent/brain-model.js) and the partner connector are attached further down; until then the agent runs on its rules and its own data */
   let modelBrain = null;
   function modelDown() { modelBrain = null; $('#aiTag').hidden = true; }
-  function partnerSend() {}
+  /* ---------- the partner hotel system: reached only through a connector (connectors/connector.js) ----------
+     In this demo the connector is the in-browser partner (connectors/demo-partner.js, shown on partner.html).
+     The partner is the reference for bookings, room states and rates; Sila sends it what the agent does. */
+  const SYNC_KEY = 'sila.sync.v1' + (EN ? '.en' : '');
+  const saveStore = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };      // the real data, also while the film plays on its copy
+  function adoptLatest() {
+    let fresh = null; try { fresh = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    if (fresh && Array.isArray(fresh.rooms) && Array.isArray(fresh.bookings) && fresh.perms && fresh.pricing) adopt(fresh);
+  }
+  const REFRESH = {};
+  let presented = '';
+  function stageRefresh() {                       // the data under the screen changed: show the step the booking is at now
+    if (!cur || !askResolve || turning || session.waiting || S !== store) return;
+    const now = stageOf(cur);
+    if (now === presented && now !== 'payment' && now !== 'readiness') return;
+    const go = askResolve; askResolve = null; go(REFRESH);
+  }
+  function wakeWaiters() {
+    Object.keys(waiters).forEach(no => { const r = store.rooms.find(x => x.no === no); if (r && r.state === 'ready') { const go = waiters[no]; delete waiters[no]; go(); } });
+  }
+  const SYNC = LM_PAGE ? null : AG.sync.create({
+    connector: AG.demoPartner.open(lang).connector, key: SYNC_KEY,
+    refresh: adoptLatest, local: () => store,
+    makeBooking: rb => blank({ id: rb.id, name: rb.name, room: rb.room, nights: rb.nights, eta: rb.eta, phone: rb.phone, email: rb.email }),
+    commit(changes) {
+      saveStore();
+      if (S !== store || !changes.length) return;
+      renderHotel();
+      if (cur && !store.bookings.includes(cur)) { userAct(); clearStage(); return; }      // the partner cancelled the booking on screen
+      if (cur && roomShown && roomShown !== cur.room) {
+        roomShown = cur.room; const r = roomOf(cur); setScene(catIdx(r ? r.cat : '')); renderId();
+        push(el('div', 'm bot', fill(__('حدّث نظام الفندق غرفتك إلى الجناح {room}.'), { room: cur.room })));
+      }
+      refreshScene(); wakeWaiters(); stageRefresh();
+    }
+  });
+  function partnerSend(type, b, p) {
+    if (S !== store || !SYNC) return;               // the film never reaches the partner
+    if (b && b.src !== 'partner') { SYNC.note('skip.local', { name: b.name }); return; }
+    SYNC.send(type, Object.assign({ bookingId: b ? b.id : undefined, name: b ? b.name : undefined, room: b ? b.room : p.room }, type === 'ticket' ? { ticket: p } : p));
+  }
+  const SYNC_TAG = { out: 'auto', in: 'limit', conflict: 'wait', dup: 'staff', queued: 'wait', link: 'staff', rejected: 'no', skip: 'staff' };
+  function renderSync() {
+    if (!SYNC) return;
+    const s = SYNC.state(), on = SYNC.online(), st = $('#syncState');
+    st.textContent = on ? __('متصل بنظام الشريك') : __('الشريك مفصول: صلة تكمل ببياناتها') + (s.outbox.length ? ' · ' + s.outbox.length + __(' عملية تنتظر') : '');
+    st.className = 'sync-state ' + (on ? 'on' : 'off');
+    const ul = $('#syncLog'); ul.textContent = '';
+    if (!s.log.length) ul.append(el('li', '', __('لا مزامنة بعد. ما يُرسل للشريك وما يُستقبل منه يظهر هنا.')));
+    s.log.forEach(e => { const li = el('li'); li.append(el('time', '', e.t), el('span', '', AG.sync.text(e, lang)), el('span', 'tag ' + (SYNC_TAG[e.dir] || 'staff'), AG.sync.dirLabel(e.dir, lang))); ul.append(li); });
+  }
+  if (SYNC) {
+    SYNC.onChange(renderSync);
+    addEventListener('storage', e => { if (e.key === SYNC_KEY || e.key === AG.demoPartner.LINK) renderSync(); });
+  }
 
   /* ================= the agent =================
      A turn starts with something the guest wrote or did. A brain proposes a tool; agent/permissions.js decides; the tool below runs
      on top of the functions this page already had; the result goes back to the brain, which replies or picks another tool.
      Everything the brain is shown comes from snapshot(), and everything the engine decides on comes from factsFor(): both are
      built here from the hotel's data, never from what the guest typed. */
-  const AG = window.SILA, RULES = AG.brains.rules;
   const fill = (s, o) => s.replace(/\{(\w+)\}/g, (m, k) => (o[k] == null ? '' : o[k]));
   const session = { reqDone: false, waiting: false, offer: false };
   const resetSession = () => { session.reqDone = false; session.waiting = false; session.offer = false; };
@@ -908,7 +964,7 @@
   let askResolve = null, turning = false;
   const asking = on => { askInput.disabled = !on; askForm.classList.toggle('off', !on); };
   /* whatever the screen is waiting for (a button, a room becoming ready), a typed message can arrive first */
-  const race = p => new Promise(res => { askResolve = t => res({ ask: t }); asking(true); Promise.resolve(p).then(v => res({ v })); });
+  const race = p => new Promise(res => { askResolve = t => res(t === REFRESH ? { refresh: true } : { ask: t }); asking(true); Promise.resolve(p).then(v => res({ v })); });
   async function agentTurn(input, ok, auto) {
     turning = true; askResolve = null; asking(false);
     if (input.type === 'text') {
@@ -952,12 +1008,14 @@
       const b = cur; if (!b || !ok()) return;
       const stage = stageOf(b);
       let input = null, r;
+      presented = stage;
 
       if (stage === 'requests') {                    // the guest writes what they need
         setPhase('req'); const rq = reqPanel(); setPanel(...rq.nodes); hint(__('اكتب طلباتك أو اختر منها.'));
         if (auto) { if (!await typeInto(rq.ta, sc.req || '', ok, 32)) return; await sleep(600); r = { v: rq.ta.value }; }
         else r = await race(rq.done);
         if (!ok()) return;
+        if (r.refresh) continue;
         const text = r.ask != null ? r.ask : r.v;
         input = text ? { type: 'text', text } : { type: 'event', name: 'no_requests' };
 
@@ -969,6 +1027,7 @@
           if (auto) { await sleep(2400); if (!ok()) return; setRoomState(b.room, 'ready'); log(__('الجناح ') + b.room + __(' صار: جاهز'), 'staff'); r = {}; }
           else { hint(__('الغرفة ') + b.room + __(' تُجهَّز الآن. تتحدّث هذه الشاشة فور تغيير حالتها من لوحة الإدارة.'), 'warn'); r = await race(waitReady(b.room)); }
           if (!ok()) return;
+          if (r.refresh) continue;
           input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'room_ready' };
         } else {
           const wc = choice(__('الجناح ') + b.room + ' ' + why, __('لا يصدر مفتاحه قبل جاهزيته.'),
@@ -976,6 +1035,7 @@
           setPanel(...wc.nodes); hint(__('الجناح ') + b.room + ' ' + why + '.', 'warn');
           r = auto ? { v: await decide(wc, true, sc.notReady || 'wait', ok) } : await race(wc.picked);
           if (!ok()) return;
+          if (r.refresh) continue;
           input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'room_choice', v: r.v };
         }
 
@@ -985,6 +1045,7 @@
         if (auto) { await sleep(900); if (!ok()) return; pp.btns[0].classList.add('sel'); await sleep(600); r = { v: pp.btns[0] }; }
         else r = await race(pp.picked);
         if (!ok()) return;
+        if (r.refresh) continue;
         if (r.ask != null) input = { type: 'text', text: r.ask };
         else {
           const method = r.v.textContent; askResolve = null; asking(false);
@@ -1002,6 +1063,7 @@
         setPanel(...kc.nodes); hint(__('اختر طريقة استلام المفتاح.'));
         r = auto ? { v: await decide(kc, true, sc.key || 'sms', ok) } : await race(kc.picked);
         if (!ok()) return;
+        if (r.refresh) continue;
         input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'key_choice', via: r.v };
 
       } else {                                       // after the key: whatever the guest needs, inside the agent's permissions
@@ -1012,6 +1074,7 @@
           setPanel(...mc.nodes);
           r = auto ? { v: await decide(mc, true, sc.move || 'move', ok) } : await race(mc.picked);
           if (!ok()) return;
+          if (r.refresh) continue;
           input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'move_choice', v: r.v };
         } else {
           session.offer = false;
@@ -1024,6 +1087,7 @@
             r = { v: script }; script = null;
           } else r = await race(pp.done);
           if (!ok()) return;
+          if (r.refresh) continue;
           const text = r.ask != null ? r.ask : r.v;
           if (!text) continue;
           input = { type: 'text', text };
@@ -1191,7 +1255,7 @@
   $('#ctaTry').addEventListener('click', () => { takeOver(); toStage(); });
   $('#navCta').addEventListener('click', () => { if (system === 'events') { $('#evStage').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); $('#evBrief').focus({ preventScroll: true }); } else { takeOver(); toStage(); } });
   $('#exportLog').addEventListener('click', () => {
-    const data = { exportedAt: new Date().toISOString(), language: lang, note: __('بيانات تجريبية من محاكاة صلة'), log: store.log, trail: store.trail, approvalsWaiting: store.approvals, tickets: store.tickets, sync: store.sync || null };
+    const data = { exportedAt: new Date().toISOString(), language: lang, note: __('بيانات تجريبية من محاكاة صلة'), log: store.log, trail: store.trail, approvalsWaiting: store.approvals, tickets: store.tickets, sync: SYNC ? SYNC.state().log : [] };
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), link = el('a');
     link.href = url; link.download = 'sila-log-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -2193,6 +2257,7 @@
   }
 
   /* ---------- boot ---------- */
+  if (SYNC) SYNC.resume();
   if (ADMIN) { renderHotel(); renderLeads(); document.body.classList.add('in'); return; }
   if (LM_PAGE) { $('#top').classList.add('in'); return; }
 

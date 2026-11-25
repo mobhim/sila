@@ -638,3 +638,17 @@ html[data-theme="dark"] .foot-link{color:var(--lime)}
 .trail-log{max-height:420px;overflow-y:auto}
 .trail-log .trail-line{display:block;color:var(--muted);font-size:12px}
 .trail-log li b{font-weight:600}
+
+/* ---------- the partner system (partner.html) and the sync state shown on Sila's pages ---------- */
+.adm-nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;border-radius:12px;padding:10px 13px;font-size:14.5px;color:var(--on-brand);text-decoration:none;white-space:nowrap;transition:background-color .2s,color .2s}
+.adm-nav a:hover{background:rgba(255,255,255,.1);color:#fff}
+.link-box{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap}
+.sync-state{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:var(--ok)}
+.sync-state::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+.sync-state.off{color:var(--warn)}
+.sync-state:empty{display:none}
+.x-inline{color:var(--brand);font-weight:600;margin-inline-start:8px;white-space:nowrap}
+.p-rates{margin-top:14px;border-top:1px solid var(--stroke);padding-top:6px}
+.room-in.wide{width:auto;min-width:150px;padding-inline:8px;text-align:start;direction:inherit}
+label.f > span{display:block}
+label.f select{height:42px;border-radius:12px;border:1px solid var(--stroke-2);background:var(--surface);color:var(--ink);padding:0 12px;font-size:14.5px;min-width:0;width:100%}

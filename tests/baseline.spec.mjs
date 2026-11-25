@@ -203,6 +203,7 @@ test.describe('demo film', () => {
     await expect(page.locator('#feed .m.keymsg')).toHaveCount(1);
     await expect(page.locator('#feed .m.keymsg')).toHaveCount(2, { timeout: 30000 });      // scene one ends with a reissued code
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('miftah.sim.v4')).log.length)).toBe(0);   // the film never writes to the real data
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sila.partner.v1')).inbox.length)).toBe(0);   // and never reaches the partner
     expect(errors).toEqual([]);
   });
 });
