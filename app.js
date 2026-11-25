@@ -1115,7 +1115,7 @@
       else if (s.k === 'lift') R(s, 'none', 'stroke="#7C8B85" stroke-width=".08"');
       else if (s.k === 'round') parts.push('<circle cx="' + X(s.y).toFixed(2) + '" cy="' + s.x.toFixed(2) + '" r="' + s.r + '" fill="#DDE5DC" stroke="#9FB0A8" stroke-width=".05"/>');
       else if (s.k === 'seat') parts.push('<circle cx="' + X(s.y).toFixed(2) + '" cy="' + s.x.toFixed(2) + '" r="' + s.r + '" fill="#0C2A24"/>');
-      else if (s.k === 'label') parts.push('<text x="' + X(s.y).toFixed(2) + '" y="' + s.x.toFixed(2) + '" font-size="' + s.fs.toFixed(2) + '" fill="#51655F" text-anchor="middle" dominant-baseline="middle" font-family="Noto Sans Arabic, Tahoma, sans-serif">' + s.t + '</text>');
+      else if (s.k === 'label') parts.push('<text x="' + X(s.y).toFixed(2) + '" y="' + s.x.toFixed(2) + '" font-size="' + s.fs.toFixed(2) + '" fill="#51655F" text-anchor="middle" dominant-baseline="middle" font-family="Thmanyah Serif Text, Tahoma, serif">' + s.t + '</text>');
     });
     const u = Math.max(1, hall.d / 18);
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + (-3 * u).toFixed(2) + ' -1 ' + (hall.d + 4 * u).toFixed(2) + ' ' + (hall.w + 2 + u) + '" preserveAspectRatio="xMidYMid meet">' + parts.join('') + '</svg>';
@@ -1290,8 +1290,8 @@
 
   /* ---------- the proposal PDF: pages are drawn on canvas (so Arabic shapes correctly), then wrapped as JPEG pages ---------- */
   async function buildPages() {
-    const BODY = '"Noto Sans Arabic",Tahoma,sans-serif', DISP = '"Alexandria","Noto Sans Arabic",Tahoma,sans-serif';
-    try { await Promise.all(['400 24px "Noto Sans Arabic"', '600 24px "Noto Sans Arabic"', '700 24px "Noto Sans Arabic"', '700 60px "Alexandria"'].map(f => document.fonts.load(f, 'عرض 123'))); } catch (e) {}
+    const BODY = '"Thmanyah Serif Text",Tahoma,serif', DISP = '"Thmanyah Serif Text",Tahoma,serif';
+    try { await Promise.all(['500 24px "Thmanyah Serif Text"', '500 60px "Thmanyah Serif Text"'].map(f => document.fonts.load(f, 'عرض 123'))); } catch (e) {}
     const W = 1240, H = 1754, M = 92, R = W - M, pages = [], sel = EP.packs.find(p => p.k === ev.tier);
     let c, y;
     const txt = (s, x, yy, o) => { o = o || {}; c.font = (o.w || (o.f ? 700 : 400)) + ' ' + (o.s || 24) + 'px ' + (o.f || BODY); c.fillStyle = o.c || '#1A1411'; let a = o.a || 'right'; if (EN) { x = W - x; a = a === 'right' ? 'left' : a === 'left' ? 'right' : a; }      // the English page is the Arabic one mirrored

@@ -8,8 +8,8 @@ try { process.loadEnvFile(); } catch (e) {}          // .env is optional; withou
 const { handleAsk, corsHeaders, aiReady } = await import('./lib/sila-ai.js');
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url)), PORT = Number(process.env.PORT) || 3000;
-const PUBLIC = /^\/(index\.html|admin\.html|landmarks\.html|app(\.min)?\.js|experience\.(js|css)|i18n\.en\.js|style\.css|manifest\.webmanifest|[\w-]+\.(webp|svg)|landmarks\/\d-\d\.(jpg|png|webp)|media\/[\w-]+\.(webp|jpg|png)|vendor\/gsap\/\w+\.min\.js)$/;      // only the site's own files are served
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+const PUBLIC = /^\/(index\.html|admin\.html|landmarks\.html|app(\.min)?\.js|experience\.(js|css)|i18n\.en\.js|style\.css|manifest\.webmanifest|[\w-]+\.(webp|svg)|landmarks\/\d-\d\.(jpg|png|webp)|media\/[\w-]+\.(webp|jpg|png)|vendor\/gsap\/\w+\.min\.js|fonts\/[\w-]+\.otf)$/;      // only the site's own files are served
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.otf': 'font/otf' };
 
 const readBody = req => new Promise((resolve, reject) => {
   let size = 0; const chunks = [];
