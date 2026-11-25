@@ -343,14 +343,17 @@
 
   /* ---------- understanding what the guest writes ---------- */
   const DEPTS = [__('التدبير الفندقي'), __('خدمة الغرف'), __('الاستقبال'), __('الصيانة'), __('الكونسيرج')];
+  const API_URL = ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim()
+    || (/\.github\.io$/.test(location.hostname) ? 'https://sila-kappa.vercel.app/api/ask' : '');
   let ask = null;
   if (window.claude && typeof window.claude.use === 'function') {
     window.claude.use('sample').then(s => { ask = s; $('#aiTag').hidden = !s; }).catch(() => {});
-  } else if (location.protocol !== 'file:' && ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim()) {
-    /* outside the Claude page the same calls go to a server (api/ask) that holds the model key and the prompts; its address is in
-       <meta name="sila-api">. The server is given the task name and the raw input only. With the address empty (a static host
-       such as GitHub Pages) no request is made at all and the page runs on its written rules. */
-    const API = document.querySelector('meta[name="sila-api"]').content.trim();
+  } else if (location.protocol !== 'file:' && API_URL) {
+    /* outside the Claude page the same calls go to a server (api/ask) that holds the model key and the prompts.
+       Its address comes from <meta name="sila-api">; the local server (npm start) fills that in itself, and on GitHub Pages,
+       which has no server, the copy on Vercel is used. Anywhere else there is no address, so no request is made at all and
+       the page runs on its written rules. The server is given the task name and the raw input only. */
+    const API = API_URL;
     const remote = {
       async json(prompt, opts, task, input) {
         const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);

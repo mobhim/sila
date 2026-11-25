@@ -39,5 +39,5 @@ http.createServer(async (req, res) => {
     res.writeHead(e && e.code === 'ENOENT' ? 404 : 500); res.end();
   }
 }).listen(PORT, () => {
-  console.log('Sila: http://localhost:' + PORT + '  ·  AI: ' + (aiReady() ? 'on' : 'off (no ANTHROPIC_API_KEY in .env; the page uses its written rules)'));
+  console.log('Sila: http://localhost:' + PORT + '  ·  AI: ' + (aiReady() ? 'on' : 'off (no SILA_LLM_KEY or ANTHROPIC_API_KEY in .env; the page uses its written rules)'));
 });
