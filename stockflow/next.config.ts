@@ -17,6 +17,8 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  turbopack: { root: __dirname },
+  agentRules: false,
   output: "standalone",
   poweredByHeader: false,
   serverExternalPackages: ["@prisma/client", "bcryptjs", "nodemailer"],

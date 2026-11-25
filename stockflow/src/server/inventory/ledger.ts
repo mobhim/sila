@@ -39,6 +39,8 @@ export interface PostOptions {
   idempotencyKey?: string | null;
   /** Bypass the negative-stock rule (never used for user-entered outflows). */
   allowNegative?: boolean;
+  /** Historical timestamp — only for data import/seed scripts, never exposed to users. */
+  at?: Date;
 }
 
 export interface PostResult {
@@ -124,7 +126,7 @@ async function postInTx(tx: Tx, actor: Actor, opts: PostOptions): Promise<Invent
   );
 
   const created: InventoryTransaction[] = [];
-  const now = new Date();
+  const now = opts.at ?? new Date();
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
