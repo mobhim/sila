@@ -1834,7 +1834,7 @@
     ];
     /* real photographs from Wikimedia Commons, kept beside the page in landmarks/ as <city>-<spot>; each spot is [name, note, Commons file, author, licence] */
     const LOCAL = new Map();
-    CITIES.forEach((c, ci) => c.spots.forEach((s, si) => LOCAL.set(s[2], 'landmarks/' + ci + '-' + si + s[2].slice(s[2].lastIndexOf('.')).toLowerCase())));
+    CITIES.forEach((c, ci) => c.spots.forEach((s, si) => LOCAL.set(s[2], 'landmarks/' + ci + '-' + si + s[2].slice(s[2].lastIndexOf('.')).toLowerCase().replace('.png', '.webp'))));
     const photo = file => LOCAL.get(file);
     const lm = $('#citySec'), cityTabs = $('#cityTabs'), cityScene = $('#cityScene'), stackEl = $('#lmStack'), flock = $('#flockSec'), flockPhotos = $('#flockPhotos');
     let cityAt = -1, goCity = null;
@@ -1951,7 +1951,7 @@
     const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('seen'); io.unobserve(e.target); } }), { threshold: .05, rootMargin: '0px 0px -5% 0px' });
     document.querySelectorAll('.sec').forEach(n => io.observe(n));
   }
-  function start() { loader.classList.add('done'); setTimeout(() => loader.remove(), 600); page.classList.add('in'); if (!reduced && !startEvents) demo(); }
+  function start() { loader.classList.add('done'); setTimeout(() => loader.remove(), 600); page.classList.add('in'); if (!reduced && !startEvents && document.body.dataset.autoplay !== 'view') demo(); }   // data-autoplay="view": the page starts the demo when the stage is in view
   if (reduced || !document.getElementById('loader')) start();
   else {
     const WORDS = [__('استقبال'), __('جاهزية'), __('صلة')], t0 = performance.now(), DUR = 1200;

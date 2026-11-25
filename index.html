@@ -3,22 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>صلة 2.1</title>
-<meta name="description" content="صلة: مساعد استقبال فندقي يعمل داخل سياسة الفندق. نموذج أولي يعمل، متاح للاستحواذ أو الترخيص أو التبنّي المؤسسي.">
+<title>صلة 2.1 · مساعد استقبال يعمل داخل سياسة فندقك</title>
+<meta name="description" content="صلة مساعد استقبال فندقي: يكمل وصول النزيل برقم الهوية أو الجوال، ولا يصدر المفتاح قبل جاهزية الغرفة، ويحل المشاكل داخل صلاحيات يضبطها الفندق. نموذج أولي يعمل.">
+<link rel="canonical" href="https://mobhim.github.io/sila/">
+<link rel="alternate" hreflang="ar" href="https://mobhim.github.io/sila/?lang=ar">
+<link rel="alternate" hreflang="en" href="https://mobhim.github.io/sila/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://mobhim.github.io/sila/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="صلة · Sila">
+<meta property="og:title" content="صلة 2.1 · مساعد استقبال يعمل داخل سياسة فندقك">
+<meta property="og:description" content="يكمل وصول النزيل، ويحل مشاكله بعد الدفع، ويصعّد ما يتجاوز صلاحياته للموظف، ويسجّل كل قرار. نموذج أولي يعمل.">
+<meta property="og:url" content="https://mobhim.github.io/sila/">
+<meta property="og:image" content="https://mobhim.github.io/sila/media/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="ar_SA">
+<meta property="og:locale:alternate" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://mobhim.github.io/sila/media/og.jpg">
 <meta name="theme-color" content="#0B4D40">
 <!-- address of the AI server when it is on another host (e.g. https://sila.vercel.app/api/ask); empty = api/ask next to this page -->
 <meta name="sila-api" content="">
-<!-- where "request a private briefing" sends its email; empty = the visitor gets the message ready to copy -->
-<meta name="sila-contact" content="">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="media/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<script>window.__SILA_HASH = location.hash;</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
 <link rel="preload" as="image" href="standard.webp" fetchpriority="high">
-<link rel="stylesheet" href="style.css?v=8">
-<link rel="stylesheet" href="experience.css?v=1">
+<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="experience.css?v=2">
 </head>
-<body data-page="site">
+<body data-page="site" data-autoplay="view">
+<a class="x-skip" href="#main" data-en="Skip to content">انتقل إلى المحتوى</a>
 <div class="x-progress" aria-hidden="true"><i></i></div>
 
 <nav class="nav" id="nav" dir="rtl" lang="ar" aria-label="التنقل">
@@ -29,11 +47,11 @@
       <button type="button" id="sysEvents" aria-pressed="false">الفعاليات</button>
     </div>
     <span class="nav-set" id="navStay">
-      <button class="nav-link" type="button" data-go="opportunity" data-en="Opportunity">الفرصة</button>
-      <button class="nav-link" type="button" data-go="stage" data-en="Experience">التجربة</button>
-      <button class="nav-link" type="button" data-go="system" data-en="System">المنظومة</button>
-      <button class="nav-link" type="button" data-go="value" data-en="Value">القيمة</button>
-      <button class="nav-link" type="button" data-go="opportunities" data-en="Opportunities">الفرص</button>
+      <button class="nav-link" type="button" data-go="solution" data-en="How it works">كيف تعمل</button>
+      <button class="nav-link" type="button" data-go="stage" data-en="Try it">التجربة</button>
+      <button class="nav-link" type="button" data-go="system" data-en="Capabilities">القدرات</button>
+      <button class="nav-link" type="button" data-go="limitsSec" data-en="Permissions">الصلاحيات</button>
+      <button class="nav-link" type="button" data-go="adminSec" data-en="Admin">الإدارة</button>
     </span>
     <span class="nav-set" id="navEvents" hidden>
       <button class="nav-link" type="button" data-go="evStage">المخطِّط</button>
@@ -41,11 +59,26 @@
     </span>
     <span class="nav-end">
       <button class="lang" type="button" id="langBtn" lang="en" aria-label="Switch to English">EN</button>
-      <button class="btn-nav x-nav-try" type="button" id="navCta">سجّل وصولك ↗</button>
-      <button class="btn-nav x-nav-brief" type="button" data-brief data-en="Private briefing">اطلب عرضاً خاصاً</button>
+      <button class="btn-nav" type="button" id="navCta">سجّل وصولك ↗</button>
+      <button class="x-menu-btn" type="button" id="xMenuBtn" aria-expanded="false" aria-controls="xMenu" aria-label="القائمة"><span></span><span></span></button>
     </span>
   </div>
 </nav>
+<div class="x-menu" id="xMenu" dir="rtl" lang="ar" hidden>
+  <div class="x-menu-in">
+    <p class="x-menu-h" data-en="Sections">الأقسام</p>
+    <a href="#solution" data-go-x="solution" data-en="How Sila works">كيف تعمل صلة</a>
+    <a href="#stage" data-go-x="stage" data-en="Try the prototype">جرّب النموذج</a>
+    <a href="#system" data-go-x="system" data-en="Capabilities">القدرات</a>
+    <a href="#limitsSec" data-go-x="limitsSec" data-en="Permissions">الصلاحيات</a>
+    <a href="#adminSec" data-go-x="adminSec" data-en="Admin console">لوحة الإدارة</a>
+    <a href="#eventsSec" data-go-x="eventsSec" data-en="Event planner">مخطِّط الفعاليات</a>
+    <a href="#suitesSec" data-go-x="suitesSec" data-en="Rooms">الغرف</a>
+    <p class="x-menu-h" data-en="Pages">الصفحات</p>
+    <a href="admin.html" data-en="Admin console ↗">لوحة الإدارة ↗</a>
+    <a href="landmarks.html" data-en="City landmarks ↗">معالم المدن ↗</a>
+  </div>
+</div>
 
 <button class="help-fab" id="helpFab" type="button" aria-expanded="false" aria-controls="helpBox" aria-label="تحدّث مع صلة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4.5"/></svg></button>
 <section class="help-box" id="helpBox" dir="rtl" lang="ar" aria-label="صلة" hidden>
@@ -59,6 +92,7 @@
  <div class="view" id="stayView">
 
   <!-- 1 · attention -->
+  <main id="main">
   <header class="x-hero" id="intro">
     <svg class="x-threads" viewBox="0 0 1440 900" preserveAspectRatio="none" aria-hidden="true">
       <path pathLength="1" d="M-40 610 C200 470 360 720 600 560 S980 330 1180 470 1400 600 1500 420"/>
@@ -67,13 +101,13 @@
     </svg>
     <div class="wrap x-hero-in">
       <div class="x-hero-copy">
-        <p class="x-badge" data-x="1"><span>SILA 2.1</span><span data-en="Hotel front-desk copilot · working prototype">مساند استقبال فندقي · نموذج أولي يعمل</span></p>
+        <p class="x-badge" data-x="1"><span>SILA 2.1</span><span data-en="Hotel front-desk assistant · working prototype">مساعد استقبال فندقي · نموذج أولي يعمل</span></p>
         <h1 class="x-title" data-x="2" data-en="A front desk that works <em>inside your hotel’s policy</em>">استقبال يعمل <em>داخل سياسة فندقك</em></h1>
-        <p class="x-role" data-x="3"><span data-en="Right now, Sila">الآن، صلة</span> <em id="role">يفهم طلبات النزيل</em></p>
-        <p class="x-lede" data-x="4" data-en="Sila completes the guest’s arrival, solves problems after payment, escalates whatever exceeds its permissions to staff, and logs every decision. A working prototype, ready to be acquired, licensed or adopted.">صلة يكمل وصول النزيل، ويحل مشاكله بعد الدفع، ويصعّد ما يتجاوز صلاحياته إلى الموظف، ويسجّل كل قرار. نموذج أولي يعمل، جاهز للاستحواذ أو الترخيص أو التبنّي المؤسسي.</p>
+        <p class="x-role" data-x="3"><span data-en="Right now, Sila">الآن، المساعد</span> <em id="role">يفهم طلبات النزيل</em></p>
+        <p class="x-lede" data-x="4" data-en="Sila completes the guest’s arrival, solves problems after payment, sends whatever exceeds its permissions to staff, and logs every decision.">صلة تكمل وصول النزيل، وتحل مشاكله بعد الدفع، وتحوّل ما يتجاوز صلاحياتها إلى الموظف، وتسجّل كل قرار.</p>
         <div class="x-cta" data-x="5">
           <button class="big solid" type="button" id="ctaDemo" data-en="Watch Sila work">شاهد صلة تعمل</button>
-          <button class="big out" type="button" data-brief data-en="Request a private briefing">اطلب عرضاً خاصاً</button>
+          <button class="big out" type="button" data-go-x="system" data-en="Explore the capabilities">استكشف القدرات</button>
         </div>
       </div>
       <div class="x-stream" data-x="6" aria-label="قرارات صلة">
@@ -84,40 +118,16 @@
         </div>
       </div>
     </div>
-    <button class="x-scroll" type="button" data-go-x="opportunity" aria-label="تابع"><span></span></button>
+    <button class="x-scroll" type="button" data-go-x="solution" aria-label="تابع"><span></span></button>
   </header>
 
-  <!-- 2 · the opportunity -->
-  <section class="x-sec x-opp" id="opportunity">
-    <div class="wrap">
-      <div class="x-head" data-rv>
-        <h2 data-en="Saudi hotels need to automate the front desk. <em>Unchecked AI is the risk.</em>">الفنادق السعودية تحتاج أتمتة الاستقبال. <em>والذكاء بلا ضوابط هو الخطر.</em></h2>
-        <p data-en="An assistant that promises a refund, changes a price or opens a door for the wrong person costs a hotel more than it saves. That is the gap Sila was built for.">مساعد يَعِد النزيل باسترجاع، أو يغيّر سعراً، أو يفتح باباً لغير صاحبه، يكلّف الفندق أكثر مما يوفّر. هذه هي الفجوة التي صُمّمت صلة لها.</p>
-      </div>
-      <div class="x-facts">
-        <article class="x-fact" data-rv>
-          <b class="x-num"><span data-count="320" data-prefix="+">320</span><small data-en="k">ألف</small></b>
-          <p data-en="new hotel rooms planned by 2030, on top of about 171,000 quality rooms today.">غرفة فندقية جديدة مستهدفة بحلول 2030، فوق نحو 171 ألف غرفة اليوم.</p>
-        </article>
-        <article class="x-fact" data-rv>
-          <b class="x-num"><span data-count="100">100</span><small>%</small></b>
-          <p data-en="of hotel receptionist roles are reserved for Saudi nationals. Every front-desk hour matters.">من وظائف الاستقبال الفندقي محصورة بالسعوديين. كل ساعة في الاستقبال لها قيمة.</p>
-        </article>
-        <article class="x-fact" data-rv>
-          <b class="x-num"><span data-count="2">2</span><small data-en="of 3">من 3</small></b>
-          <p data-en="consumers in Saudi Arabia and the UAE prefer WhatsApp for talking to brands.">من المستهلكين في السعودية والإمارات يفضّلون واتساب للتواصل مع العلامات التجارية.</p>
-        </article>
-      </div>
-      <p class="x-src" data-rv><span data-en="Public sources:">مصادر عامة:</span> <a href="https://gulfnews.com/business/tourism/saudi-arabia-will-add-another-320000-hotel-rooms-by-2030-as-it-targets-peak-tourism-1.1713942849183" target="_blank" rel="noopener">Gulf News</a> · <a href="https://www.clydeco.com/en/insights/2025/05/saudisation-in-ksas-tourism-sector" target="_blank" rel="noopener">Clyde &amp; Co</a> · <a href="https://www.unifonic.com/en/resources/smarter-travel-happier-guests-inside-unifonics-tourism-tech-stack" target="_blank" rel="noopener">Unifonic</a></p>
-    </div>
-  </section>
 
-  <!-- 3 · the answer -->
+  <!-- 2 · how it works (C8) -->
   <section class="x-sec x-sol" id="solution">
     <div class="wrap">
       <div class="x-head" data-rv>
-        <h2 data-en="Sila is the <em>decision layer</em> between the guest and the hotel">صلة هي <em>طبقة القرار</em> بين النزيل والفندق</h2>
-        <p data-en="It understands what the guest asks, acts only where the hotel allows it, and leaves a record behind every action.">تفهم ما يطلبه النزيل، وتنفّذ فقط حيث يسمح الفندق، وتترك سجلاً خلف كل إجراء.</p>
+        <h2 data-en="How Sila works: <em>three steps, one thread</em>">كيف تعمل صلة: <em>ثلاث خطوات، خيط واحد</em></h2>
+        <p data-en="The guest writes, Sila decides within the hotel’s permissions, and the hotel sees and approves.">النزيل يكتب، وصلة تقرر داخل صلاحيات الفندق، والفندق يرى ويوافق.</p>
       </div>
       <div class="x-flow" data-rv>
         <svg class="x-flow-line" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M20 60 C220 10 380 110 600 60 S980 10 1180 60"/><circle class="x-pulse" r="7"/></svg>
@@ -133,13 +143,13 @@
     </div>
   </section>
 
-  <!-- 4 · the working prototype -->
+  <!-- 3 · the working prototype -->
   <section class="x-sec x-live-sec" id="experience">
     <div class="wrap">
       <div class="x-head x-head-row" data-rv>
         <div>
           <h2 data-en="The prototype <em>runs right here</em>">النموذج الأولي <em>يعمل هنا الآن</em></h2>
-          <p data-en="A live simulation of the full guest journey: identify, requests, readiness, payment, key, follow-up. Play the film or take over.">محاكاة حيّة لرحلة النزيل كاملة: التعريف، الطلبات، الجاهزية، الدفع، المفتاح، المتابعة. شغّل العرض أو تولَّ القيادة.</p>
+          <p data-en="The full guest journey in six steps. The demo starts when you get here; tap any key to take over.">رحلة النزيل كاملة في ست خطوات. يبدأ العرض حين تصل هنا، واضغط أي زر لتتولّى القيادة.</p>
         </div>
         <div class="x-head-acts"><button class="big out" type="button" id="ctaTry" data-en="Try it yourself">جرّب بنفسك</button></div>
       </div>
@@ -202,12 +212,12 @@
     </div>
   </section>
 
-  <!-- 5 · the system -->
+  <!-- 4 · capabilities (C9) -->
   <section class="x-sec x-sys" id="system">
     <div class="wrap">
       <div class="x-head" data-rv>
-        <h2 data-en="One system, <em>seven working capabilities</em>">منظومة واحدة، <em>سبع قدرات تعمل</em></h2>
-        <p data-en="Everything below exists in the prototype today. Scroll through, or open each one live.">كل ما يلي موجود في النموذج الأولي اليوم. مرّر للاستعراض، أو افتح كل قدرة حيّة.</p>
+        <h2 data-en="Seven capabilities, <em>all working today</em>">سبع قدرات، <em>كلها تعمل اليوم</em></h2>
+        <p data-en="Scroll through them, or open any one live.">مرّر لاستعراضها، أو افتح أي قدرة حيّة.</p>
       </div>
       <div class="x-show">
         <div class="x-show-visual" aria-hidden="true">
@@ -227,35 +237,72 @@
     </div>
   </section>
 
-  <!-- 6 · permissions -->
+  <!-- 5 · permissions (C19) -->
   <section class="x-sec x-perm sec" id="limitsSec">
     <div class="wrap x-perm-in">
       <div class="x-head" data-rv>
         <h2 data-en="The permission engine: <em>the hotel draws the line</em>">محرّك الصلاحيات: <em>الفندق يرسم الحد</em></h2>
-        <p data-en="Four tiers, set by the hotel. Whatever crosses them becomes an approval request for staff, and every action is logged.">أربع درجات يضبطها الفندق. ما يتجاوزها يتحول إلى طلب موافقة عند الموظف، وكل إجراء يُسجَّل.</p>
+        <p data-en="Four tiers, set by the hotel. Tap a tier to see a real example from the prototype.">أربع درجات يضبطها الفندق. اضغط على أي درجة لترى مثالاً حقيقياً من النموذج.</p>
       </div>
       <ol class="ladder">
-        <li class="lv auto">
+        <li class="lv auto" tabindex="0" role="button" aria-expanded="false">
           <b>ينفّذه بنفسه</b>
           <p>تسجيل الوصول، تحويل كل طلب للقسم المختص، وإصدار رمز الدخول بعد الدفع وجاهزية الغرفة.</p>
+        
+          <p class="x-ex" data-en="Example: a guest writes “extra bed for the child” and Sila routes it to housekeeping at once.">مثال: نزيل يكتب «سرير إضافي للطفل» فتحوّله صلة للتدبير الفندقي فوراً.</p>
         </li>
-        <li class="lv set">
+        <li class="lv set" tabindex="0" role="button" aria-expanded="false">
           <b>يضبطه الفندق</b>
           <p>إعادة إصدار رمز الدخول، فتح بلاغ صيانة أو تنظيف، النقل إلى غرفة من نفس الفئة، تأخير المغادرة ساعة، والتعويض ضمن حد يحدده الفندق.</p>
+        
+          <p class="x-ex" data-en="Example: the room is still being prepared, so Sila moves the guest to a ready room of the same category, at the same price.">مثال: الغرفة قيد التجهيز، فتنقل صلة النزيل لغرفة جاهزة من نفس الفئة وبنفس السعر.</p>
         </li>
-        <li class="lv ask">
+        <li class="lv ask" tabindex="0" role="button" aria-expanded="false">
           <b>بموافقة موظف دائماً</b>
           <p>الاسترجاع الكامل للمبلغ.</p>
+        
+          <p class="x-ex" data-en="Example: a guest asks for a refund; the request reaches staff, and nothing is refunded before they approve.">مثال: نزيل يطلب «أريد استرجاع المبلغ» فيصل الطلب للموظف، ولا يُرد المبلغ قبل موافقته.</p>
         </li>
-        <li class="lv never">
+        <li class="lv never" tabindex="0" role="button" aria-expanded="false">
           <b>ممنوع دائماً</b>
           <p>بيانات البطاقات، فتح غرفة لغير صاحب الحجز، تغيير الأسعار.</p>
+        
+          <p class="x-ex" data-en="Example: a request to open a room for someone other than the booked guest is always refused, however it is worded.">مثال: طلب فتح غرفة لغير صاحب الحجز يُرفض دائماً، مهما كانت الصياغة.</p>
         </li>
       </ol>
     </div>
   </section>
 
-  <!-- rooms (the prototype’s showroom) -->
+  <!-- 6 · admin console (C10) -->
+  <section class="x-sec x-panel" id="adminSec">
+    <div class="wrap x-panel-in">
+      <div class="x-panel-copy" data-rv>
+        <h2 data-en="The hotel sees <em>everything, live</em>">الفندق يرى <em>كل شيء لحظياً</em></h2>
+        <p data-en="The admin console is a separate page for staff: room board, bookings, approvals, cleaning and maintenance tickets, demand pricing, the assistant’s permissions, and a log of every action.">لوحة الإدارة صفحة منفصلة للموظفين: لوحة الغرف، والحجوزات، والموافقات، وبلاغات النظافة والصيانة، والتسعير حسب الطلب، وصلاحيات المساعد، وسجل بكل إجراء.</p>
+        <ol class="x-steps">
+          <li data-en="Open the console beside this page.">افتح اللوحة بجانب هذه الصفحة.</li>
+          <li data-en="On the guest screen, ask for a refund.">في شاشة النزيل، اطلب استرجاع المبلغ.</li>
+          <li data-en="Approve it in the console, and watch the guest screen update.">وافق عليه في اللوحة، وشاهد شاشة النزيل تتحدّث.</li>
+        </ol>
+        <a class="big solid" href="admin.html" target="_blank" rel="noopener" data-en="Open the admin console ↗">افتح لوحة الإدارة ↗</a>
+      </div>
+      <figure class="x-panel-shot" data-rv><div class="x-device"><div class="x-device-bar"><i></i><i></i><i></i><span>SILA · ADMIN</span></div><img data-shot-src="admin" alt="" loading="lazy" decoding="async"></div></figure>
+    </div>
+  </section>
+
+  <!-- 7 · event planner (C11) -->
+  <section class="x-sec x-panel x-panel-ev" id="eventsSec">
+    <div class="wrap x-panel-in">
+      <div class="x-panel-copy" data-rv>
+        <h2 data-en="A second system: <em>the event planner</em>">نظام ثانٍ: <em>مخطِّط الفعاليات</em></h2>
+        <p data-en="Describe an event in one sentence. Sila fills the form, picks the hall and its layout, suggests a menu, prices three packages and builds the timeline.">صِف الفعالية بجملة واحدة. تعبّئ صلة النموذج، وتختار القاعة وترتيبها، وتقترح قائمة الطعام، وتسعّر ثلاث باقات، وتبني الجدول الزمني.</p>
+        <button class="big solid" type="button" data-events data-en="Open the event planner">افتح مخطِّط الفعاليات</button>
+      </div>
+      <figure class="x-panel-shot" data-rv><div class="x-device"><div class="x-device-bar"><i></i><i></i><i></i><span>SILA · EVENTS</span></div><img data-shot-src="events" alt="" loading="lazy" decoding="async"></div></figure>
+    </div>
+  </section>
+
+  <!-- 8 · rooms (C24) -->
   <section class="x-sec x-rooms sec" id="suitesSec">
     <div class="wrap">
       <div class="x-head" data-rv>
@@ -266,126 +313,9 @@
     </div>
   </section>
 
-  <!-- 7 · strategic value -->
-  <section class="x-sec x-val" id="value">
-    <div class="wrap">
-      <div class="x-head" data-rv>
-        <h2 data-en="Why Sila matters <em>to large organisations</em>">لماذا تهمّ صلة <em>الجهات الكبرى</em></h2>
-        <p data-en="Each of these players can turn Sila into a capability it does not have today.">كل جهة من هذه الجهات تستطيع تحويل صلة إلى قدرة لا تملكها اليوم.</p>
-      </div>
-      <ol class="x-rows">
-        <li data-rv><b data-en="Hotel management system (PMS) providers">مزوّدو أنظمة إدارة الفنادق (PMS)</b><p data-en="An Arabic-first AI layer with guardrails, offered to their existing hotels as a new module.">طبقة ذكاء عربية أولاً بضوابط، تُقدَّم لفنادقهم الحالية كوحدة جديدة.</p></li>
-        <li data-rv><b data-en="Saudi hotel groups">المجموعات الفندقية السعودية</b><p data-en="One policy applied across every property and every shift, with an audit trail for each decision.">سياسة واحدة تُطبَّق في كل فرع وكل وردية، مع سجل تدقيق لكل قرار.</p></li>
-        <li data-rv><b data-en="Telecom and WhatsApp Business providers">مزوّدو الاتصالات وواتساب للأعمال</b><p data-en="A ready hospitality use case for the channel guests already prefer.">حالة استخدام فندقية جاهزة على القناة التي يفضّلها النزلاء أصلاً.</p></li>
-        <li data-rv><b data-en="Tourism programmes and innovation units">برامج السياحة ووحدات الابتكار</b><p data-en="A local, demonstrable concept aligned with the Kingdom’s hospitality growth.">مفهوم محلي قابل للعرض، يتماشى مع نمو الضيافة في المملكة.</p></li>
-      </ol>
-    </div>
-  </section>
 
-  <!-- 8 · what exists, and where it can go -->
-  <section class="x-sec x-ready" id="ready">
-    <div class="wrap">
-      <div class="x-head" data-rv>
-        <h2 data-en="Built to plug in, <em>designed to scale</em>">مبني للتكامل، <em>مصمَّم للتوسع</em></h2>
-        <p data-en="What exists is marked as existing. What is a path is marked as a path.">ما هو قائم مكتوب أنه قائم، وما هو مسار مكتوب أنه مسار.</p>
-      </div>
-      <div class="x-ready-grid">
-        <div class="x-col" data-rv>
-          <h3><span class="x-tag on" data-en="Exists today">قائم اليوم</span></h3>
-          <ul>
-            <li data-en="The full guest journey as a working simulation">رحلة النزيل كاملة كمحاكاة تعمل</li>
-            <li data-en="A four-tier permission engine with an audit log">محرّك صلاحيات بأربع درجات مع سجل تدقيق</li>
-            <li data-en="An admin console synced live with the guest screen">لوحة إدارة متزامنة لحظياً مع شاشة النزيل</li>
-            <li data-en="AI tasks served from a server, with built-in rules as a fallback">مهام ذكاء اصطناعي من خادم، مع قواعد احتياطية مدمجة</li>
-            <li data-en="Event planner, chat assistant, Arabic and English">مخطِّط فعاليات، ومساعد محادثة، وعربي وإنجليزي</li>
-          </ul>
-        </div>
-        <div class="x-col x-col-path" data-rv>
-          <h3><span class="x-tag" data-en="Integration paths · not built yet">مسارات تكامل · غير منفّذة بعد</span></h3>
-          <ul>
-            <li data-en="Hotel management systems (PMS), and through them the guest registration and e-invoicing platforms">أنظمة إدارة الفنادق (PMS)، ومن خلالها منصات تسجيل النزلاء والفوترة الإلكترونية</li>
-            <li data-en="WhatsApp Business as the guest’s main channel">واتساب للأعمال كقناة النزيل الأساسية</li>
-            <li data-en="Smart door locks and live payments">أقفال الأبواب الذكية والدفع الفعلي</li>
-            <li data-en="Multi-property operation and white-label branding">تشغيل متعدد المنشآت وعلامة بيضاء</li>
-            <li data-en="Pilgrim languages for Makkah and Madinah">لغات الزوار لفنادق مكة والمدينة</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- 9 · strategic opportunities -->
-  <section class="x-sec x-ops" id="opportunities">
-    <div class="wrap">
-      <div class="x-head" data-rv>
-        <h2 data-en="Strategic <em>Opportunities</em>">الفرص <em>الاستراتيجية</em></h2>
-        <p data-en="Sila is open to the model that fits your organisation. Every model starts with a private briefing.">صلة مفتوحة للنموذج الذي يناسب جهتك. كل نموذج يبدأ بعرض خاص.</p>
-      </div>
-      <div class="x-ops-ui" data-rv>
-        <div class="x-ops-tabs" role="tablist" aria-label="نماذج التعاون">
-          <button type="button" role="tab" data-op="acquire" aria-selected="true" data-en="Rights acquisition">الاستحواذ على الحقوق</button>
-          <button type="button" role="tab" data-op="license" aria-selected="false" data-en="Licensing">الترخيص</button>
-          <button type="button" role="tab" data-op="white" aria-selected="false" data-en="White label">العلامة البيضاء</button>
-          <button type="button" role="tab" data-op="integrate" aria-selected="false" data-en="Integration partnership">شراكة التكامل</button>
-          <button type="button" role="tab" data-op="adopt" aria-selected="false" data-en="Enterprise adoption">التبنّي المؤسسي</button>
-        </div>
-        <div class="x-ops-panels">
-          <article class="x-op" data-op="acquire">
-            <h3 data-en="Own Sila outright">امتلك صلة بالكامل</h3>
-            <p data-en="The concept, the working prototype, the design, the code and the brand move to your organisation.">ينتقل المفهوم والنموذج الأولي والتصميم والكود والعلامة إلى جهتك.</p>
-            <dl><dt data-en="You get">تحصل على</dt><dd data-en="Full ownership and freedom to build on it">ملكية كاملة وحرية البناء عليها</dd><dt data-en="Best for">الأنسب لـ</dt><dd data-en="PMS providers and hotel-technology companies">مزوّدي أنظمة إدارة الفنادق وشركات تقنية الضيافة</dd></dl>
-          </article>
-          <article class="x-op" data-op="license" hidden>
-            <h3 data-en="Use Sila under licence">استخدم صلة بترخيص</h3>
-            <p data-en="Rights to use and adapt Sila within an agreed scope, market or period, while ownership stays with its creators.">حق استخدام صلة وتطويعها ضمن نطاق أو سوق أو مدة متفق عليها، مع بقاء الملكية لأصحابها.</p>
-            <dl><dt data-en="You get">تحصل على</dt><dd data-en="Speed to market without building from scratch">سرعة دخول دون بناء من الصفر</dd><dt data-en="Best for">الأنسب لـ</dt><dd data-en="Groups and providers that want a defined scope">المجموعات والمزوّدون الذين يريدون نطاقاً محدداً</dd></dl>
-          </article>
-          <article class="x-op" data-op="white" hidden>
-            <h3 data-en="Offer it under your brand">قدّمها باسمك</h3>
-            <p data-en="Sila’s experience, delivered under your name, colours and channels.">تجربة صلة، تُقدَّم باسمك وألوانك وقنواتك.</p>
-            <dl><dt data-en="You get">تحصل على</dt><dd data-en="A product your customers see as yours">منتج يراه عملاؤك منتجك</dd><dt data-en="Best for">الأنسب لـ</dt><dd data-en="Hotel groups with their own app, PMS providers">مجموعات فندقية لها تطبيقها، ومزوّدو PMS</dd></dl>
-          </article>
-          <article class="x-op" data-op="integrate" hidden>
-            <h3 data-en="Build the integration together">ابنِ التكامل معنا</h3>
-            <p data-en="Connect Sila to your system so your customers get it as a native capability.">اربط صلة بنظامك ليحصل عليها عملاؤك كقدرة أصيلة فيه.</p>
-            <dl><dt data-en="You get">تحصل على</dt><dd data-en="A new module for your existing customers">وحدة جديدة لعملائك الحاليين</dd><dt data-en="Best for">الأنسب لـ</dt><dd data-en="PMS, messaging and payment providers">مزوّدي PMS والمراسلة والدفع</dd></dl>
-          </article>
-          <article class="x-op" data-op="adopt" hidden>
-            <h3 data-en="Adopt it in your hotels">تبنَّها في فنادقك</h3>
-            <p data-en="Start with a defined pilot in one property, with success criteria agreed in advance.">ابدأ بتجربة محددة في منشأة واحدة، بمعايير نجاح متفق عليها مسبقاً.</p>
-            <dl><dt data-en="You get">تحصل على</dt><dd data-en="Evidence from your own operation before scaling">دليل من تشغيلك أنت قبل التوسع</dd><dt data-en="Best for">الأنسب لـ</dt><dd data-en="Saudi hotel groups and serviced apartments">المجموعات الفندقية السعودية والشقق المخدومة</dd></dl>
-          </article>
-          <button class="big solid x-op-go" type="button" data-brief data-en="Discuss this model ↗">ناقش هذا النموذج ↗</button>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- 10 · private briefing -->
-  <section class="x-sec x-brief" id="brief">
-    <div class="wrap x-brief-in">
-      <div class="x-brief-copy" data-rv>
-        <h2 data-en="Request a <em>private briefing</em>">اطلب <em>عرضاً خاصاً</em></h2>
-        <p data-en="A walkthrough of the full prototype for your team, and a conversation about the model that suits you. Technical depth is shared after a confidentiality agreement.">جولة في النموذج الأولي كاملاً لفريقك، وحديث عن النموذج الذي يناسبكم. التفاصيل التقنية تُشارَك بعد اتفاقية سرية.</p>
-        <img class="x-brief-mark" src="logo.svg" alt="" width="64" height="64">
-      </div>
-      <form class="x-form" id="xBrief" data-rv novalidate>
-        <label><span data-en="Name">الاسم</span><input name="name" required autocomplete="name" maxlength="80"></label>
-        <label><span data-en="Organisation">الجهة</span><input name="org" required autocomplete="organization" maxlength="80"></label>
-        <label><span data-en="Role">المنصب</span><input name="role" autocomplete="organization-title" maxlength="80"></label>
-        <label><span data-en="Interest">مجال الاهتمام</span><select name="interest" id="xInterest">
-          <option value="acquire" data-en="Rights acquisition">الاستحواذ على الحقوق</option>
-          <option value="license" data-en="Licensing">الترخيص</option>
-          <option value="white" data-en="White label">العلامة البيضاء</option>
-          <option value="integrate" data-en="Integration partnership">شراكة التكامل</option>
-          <option value="adopt" data-en="Enterprise adoption">التبنّي المؤسسي</option>
-        </select></label>
-        <label class="x-wide"><span data-en="Message (optional)">رسالة (اختياري)</span><textarea name="msg" rows="3" maxlength="600"></textarea></label>
-        <div class="x-wide x-form-end"><button class="big solid" type="submit" data-en="Send request">أرسل الطلب</button><p class="x-form-msg" id="xBriefMsg" aria-live="polite"></p></div>
-        <div class="x-wide x-copy" id="xCopy" hidden><textarea readonly rows="6" id="xCopyText" aria-label="نص الطلب"></textarea><button class="big out" type="button" id="xCopyBtn" data-en="Copy the request">انسخ الطلب</button></div>
-      </form>
-    </div>
-  </section>
  </div>
 
 <div class="view" id="eventsView" hidden>
@@ -472,16 +402,40 @@
  </div>
 
   <footer class="footer x-foot">
+    <div class="wrap x-foot-grid">
+      <div class="x-foot-brand">
+        <span class="logo"><img class="mark" src="logo.svg" alt="" width="34" height="34"><b data-en="Sila">صلة</b></span>
+        <p data-en="A hotel front-desk assistant that works inside the hotel’s policy.">مساعد استقبال فندقي يعمل داخل سياسة الفندق.</p>
+      </div>
+      <nav class="x-foot-col" aria-label="الأقسام">
+        <b data-en="Sections">الأقسام</b>
+        <a href="#solution" data-go-x="solution" data-en="How it works">كيف تعمل</a>
+        <a href="#stage" data-go-x="stage" data-en="Try it">التجربة</a>
+        <a href="#system" data-go-x="system" data-en="Capabilities">القدرات</a>
+        <a href="#limitsSec" data-go-x="limitsSec" data-en="Permissions">الصلاحيات</a>
+      </nav>
+      <nav class="x-foot-col" aria-label="الصفحات">
+        <b data-en="Pages">الصفحات</b>
+        <a href="admin.html" data-en="Admin console">لوحة الإدارة</a>
+        <a href="landmarks.html" data-en="City landmarks">معالم المدن</a>
+        <button type="button" class="x-foot-link" data-events data-en="Event planner">مخطِّط الفعاليات</button>
+      </nav>
+    </div>
     <div class="wrap foot-bar">
       <span class="live" data-en="Sila 2.1 · a simulation running inside the page">صلة 2.1 · محاكاة تعمل داخل الصفحة</span>
       <p>ليست نظاماً تشغيلياً: لا يُخصم مبلغ، لا تُرسل رسائل، ولا يُفتح باب. البيانات تُحفظ في هذا المتصفح فقط.</p>
-      <a class="foot-link" href="landmarks.html">معالم المدن</a>
-      <a class="foot-link" href="admin.html">لوحة الإدارة</a>
     </div>
   </footer>
 </div>
-<script src="i18n.en.js?v=8"></script>
-<script src="app.js?v=8"></script>
-<script src="experience.js?v=1"></script>
+<script>
+  (function () {                                    // the English dictionary is loaded only when English is the page language
+    var q = new URLSearchParams(location.search).get('lang'), l = q;
+    try { if (q !== 'ar' && q !== 'en') l = localStorage.getItem('sila.lang'); } catch (e) {}
+    if (l !== 'ar' && l !== 'en') l = /^ar\b/i.test(navigator.language || '') ? 'ar' : 'en';
+    if (l === 'en') document.write('<script src="i18n.en.js?v=9"><\/script>');
+  })();
+</script>
+<script src="app.min.js?v=9"></script>
+<script src="experience.js?v=2"></script>
 </body>
 </html>

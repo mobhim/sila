@@ -589,3 +589,16 @@ body[data-page="landmarks"] .lm{padding-top:clamp(24px,4vw,48px)}
 body[data-page="landmarks"] .lm-live{padding-top:0}
 @media (max-width:860px){.nav-link.keep{display:inline-flex;padding:7px 9px;font-size:13.5px}}
 @media (max-width:680px){body[data-page="landmarks"] .btn-nav{display:none}}
+
+/* صلة 2.1 · أهداف لمس لا تقل عن 44 بكسل (C3) */
+.lang{height:44px;min-width:44px}
+.nav-link{min-height:44px}
+.btn-nav{min-height:44px}
+.chip{min-height:44px;padding:6px 14px}
+.seg button{min-height:40px}
+.help-head button{min-width:44px;min-height:44px}
+.foot-link{display:inline-flex;align-items:center;min-height:44px}
+.sys button{min-height:40px}
+.logo{min-height:44px;min-width:44px}
+/* المعالم: صور المدن العائمة تتجاوز حافة الجوال ببضع بكسلات، فلا يُسمح بالتمرير الأفقي */
+html:has(body[data-page="landmarks"]),body[data-page="landmarks"]{overflow-x:clip}
