@@ -606,3 +606,9 @@ body[data-page="landmarks"] .lm-live{padding-top:0}
 .logo{min-height:44px;min-width:44px}
 /* المعالم: صور المدن العائمة تتجاوز حافة الجوال ببضع بكسلات، فلا يُسمح بالتمرير الأفقي */
 html:has(body[data-page="landmarks"]),body[data-page="landmarks"]{overflow-x:clip}
+/* المعالم في وضعها الليلي: نصوص آخر الصفحة تبقى مقروءة */
+html[data-theme="dark"] .credits summary{color:#F5F7F2}
+html[data-theme="dark"] .credits,html[data-theme="dark"] .credits a{color:#C9DBD3}
+html[data-theme="dark"] .footer{border-top-color:rgba(255,255,255,.18)}
+html[data-theme="dark"] .foot-bar{color:#C9DBD3}
+html[data-theme="dark"] .foot-link{color:var(--lime)}
