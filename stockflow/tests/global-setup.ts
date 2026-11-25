@@ -5,6 +5,6 @@ export default function setup() {
   process.env.DATABASE_URL = url;
   execSync("npx prisma migrate deploy", {
     stdio: "inherit",
-    env: { ...process.env, DATABASE_URL: url },
+    env: { ...process.env, DATABASE_URL: url, DATABASE_URL_UNPOOLED: url },
   });
 }

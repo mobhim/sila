@@ -2,7 +2,7 @@
   "name": "stockflow",
   "version": "1.0.0",
   "private": true,
-  "description": "STOCKFLOW — multi-branch inventory management",
+  "description": "STOCKFLOW \u2014 multi-branch inventory management",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -13,7 +13,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:bootstrap": "tsx scripts/bootstrap-owner.ts",
     "test": "vitest run",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate && prisma migrate deploy && node scripts/demo-seed-if-enabled.mjs && next build"
   },
   "engines": {
     "node": ">=20.12"

@@ -97,7 +97,7 @@ async function main() {
   }
 
   const ownerActor = (await loadActor(owner.id))!;
-  const DAYS = 45;
+  const DAYS = Number(process.env.SEED_DAYS) || 45;
   const start = new Date(Date.now() - DAYS * 86400000);
   // Deterministic pseudo-random so the demo is reproducible.
   let seed = 42;

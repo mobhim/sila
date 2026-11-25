@@ -25,16 +25,21 @@ Schedule the notification dispatcher every 1–5 minutes:
 */2 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://stock.example.sa/api/cron/notifications
 ```
 
-## Option B — Vercel + managed PostgreSQL (Neon, Supabase, RDS)
+## Option B — Vercel + Neon (fastest; works from a browser)
 
-1. Create the database; copy the **pooled** connection string into `DATABASE_URL`.
-2. Import the repository, set the project root to `stockflow/`, add the environment variables.
-3. Build command `npm run build` (default). Run migrations from CI or locally:
-   `DATABASE_URL=... npx prisma migrate deploy`.
-4. Uploads: set `UPLOAD_DRIVER=s3` (serverless functions have no persistent disk).
-5. `vercel.json` registers a cron for `/api/cron/notifications` every 5 minutes; Vercel sends
-   `Authorization: Bearer $CRON_SECRET` automatically. (Sub-daily crons require a paid plan;
-   otherwise use an external scheduler as in option A.)
+1. Vercel → **Add New → Project** → import the GitHub repository. Set **Root Directory** to `stockflow`.
+   Framework is detected as Next.js; the `vercel-build` script runs migrations automatically.
+2. In the project → **Storage → Create Database → Neon (Postgres)**, connect it to the project.
+   This adds `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (direct, used by migrations).
+3. Environment variables: `APP_URL` (the site URL), `CRON_SECRET` (any long random string).
+   For a demo site add `ALLOW_DEMO_SEED=true` to load sample branches, products, users and history
+   on the first build (skipped automatically once users exist). Leave it out for real use and
+   create the owner with `npm run db:bootstrap` instead.
+4. Deploy. Uploads on Vercel default to the function's temporary disk (`/tmp`), which is not
+   persistent — set `UPLOAD_DRIVER=s3` with an S3/R2 bucket for real use.
+5. `vercel.json` registers a daily cron for `/api/cron/notifications` (allowed on the free plan).
+   For near-real-time email/WhatsApp/SMS, call that URL every few minutes from an external
+   scheduler with `Authorization: Bearer $CRON_SECRET`, or use a paid plan and a shorter schedule.
 
 ## Migrations
 
