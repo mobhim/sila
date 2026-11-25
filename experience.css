@@ -117,7 +117,7 @@ html[dir="rtl"] .x-scroll{transform:translateX(50%)}
 
 /* ---------- 5 · system (sticky product showcase) ---------- */
 .x-sys{background:var(--x-dark);color:#fff}
-.x-sys .x-head h2 em{color:var(--lime)}
+.x-sys .x-head h2 em,.x-dark .x-head h2 em{color:var(--lime);box-shadow:none}
 .x-sys .x-head p{color:var(--on-brand)}
 .x-show{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:clamp(28px,4vw,64px);align-items:start}
 .x-show-visual{position:sticky;top:96px}

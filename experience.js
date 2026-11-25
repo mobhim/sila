@@ -109,7 +109,7 @@
   }
 
   /* ---------- screenshots follow the page language ---------- */
-  const shot = k => 'media/' + k + '-' + (EN ? 'en' : 'ar') + '.webp';
+  const shot = k => 'media/' + k + '-' + (EN ? 'en' : 'ar') + '.webp?v=2';
   $$('img[data-shot-src]').forEach(im => { im.src = shot(im.dataset.shotSrc); });
 
   /* ---------- capabilities: a device that follows the capability in focus (C9) ---------- */
