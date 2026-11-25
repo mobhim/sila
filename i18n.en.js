@@ -1,6 +1,16 @@
 /* صلة — English strings, keyed by the Arabic source string used in app.js and index.html.
    A key ending in |name is a second wording for the same Arabic string (see __(text, name) in app.js). */
 window.SILA_EN = {
+  "انتقل إلى المحتوى": "Skip to content",
+  "القائمة": "Menu",
+  "الأقسام": "Sections",
+  "الصفحات": "Pages",
+  "صلة 2.1 · مساعد استقبال يعمل داخل سياسة فندقك": "Sila 2.1 · a front desk that works inside your hotel’s policy",
+  "صلة 2.1": "Sila 2.1",
+  "قرارات صلة": "Sila’s decisions",
+  "تابع": "Continue",
+  "نماذج التعاون": "Collaboration models",
+  "نص الطلب": "Request text",
   "ستاندر": "Standard",
   "غرفة عائلية": "Family Room",
   "جناح ملكي": "Royal Suite",

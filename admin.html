@@ -8,10 +8,10 @@
 <meta name="theme-color" content="#0B4D40">
 <meta name="sila-api" content="">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="apple-touch-icon" href="media/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preload" href="fonts/thmanyah-serif-text-medium.otf" as="font" type="font/otf" crossorigin>
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body data-page="admin">
 <div class="adm" dir="rtl" lang="ar">
@@ -136,7 +136,14 @@
     </section>
   </main>
 </div>
-<script src="i18n.en.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script>
+  (function () {                                    // the English dictionary is loaded only when English is the page language
+    var q = new URLSearchParams(location.search).get('lang'), l = q;
+    try { if (q !== 'ar' && q !== 'en') l = localStorage.getItem('sila.lang'); } catch (e) {}
+    if (l !== 'ar' && l !== 'en') l = /^ar\b/i.test(navigator.language || '') ? 'ar' : 'en';
+    if (l === 'en') document.write('<script src="i18n.en.js?v=9"><\/script>');
+  })();
+</script>
+<script src="app.min.js?v=10"></script>
 </body>
 </html>
