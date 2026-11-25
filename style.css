@@ -612,3 +612,29 @@ html[data-theme="dark"] .credits,html[data-theme="dark"] .credits a{color:#C9DBD
 html[data-theme="dark"] .footer{border-top-color:rgba(255,255,255,.18)}
 html[data-theme="dark"] .foot-bar{color:#C9DBD3}
 html[data-theme="dark"] .foot-link{color:var(--lime)}
+
+/* ---------- the agent: the ask box under the feed, and the trail of each turn ---------- */
+.ask{display:flex;flex-direction:row;gap:6px;align-items:center;flex:none}
+.ask input{flex:1;min-width:0;height:42px;border:1px solid var(--stroke);background:var(--surface-2);border-radius:99px;padding:8px 14px;font-size:13.5px;transition:border-color .2s,background-color .2s}
+.ask input:focus{background:var(--surface);border-color:var(--brand);outline:0}
+.ask .btn{flex:none}
+.ask.off{opacity:.55}
+.m.trail{align-self:stretch;max-width:none;background:var(--surface-2);border:1px solid var(--stroke);border-radius:14px;padding:9px 12px;font-size:12.5px;line-height:1.6}
+.trail-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-family:var(--f-display);font-size:12.5px;color:var(--brand)}
+.trail-head small{font-family:var(--f-body);font-size:11px;color:var(--muted)}
+.trail-got{margin:2px 0 0}
+.trail-got b{font-weight:600;color:var(--muted)}
+.m.trail ol{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.m.trail li{display:block;border-top:1px solid var(--stroke);padding-top:6px}
+.m.trail li > div{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.m.trail li b{font-weight:600}
+.m.trail li small{display:block;color:var(--muted);font-size:12px}
+.m.trail li.stop{color:var(--warn)}
+.m.trail li span.tag{font-size:11px;color:var(--brand)}
+.m.trail li span.tag.auto,.m.trail li span.tag.ok{color:var(--ok)}
+.m.trail li span.tag.wait{color:var(--warn)}
+.m.trail li span.tag.no{color:var(--bad)}
+.tag.never,.m.trail li span.tag.never{color:#fff;background:var(--bad);border-color:var(--bad)}
+.trail-log{max-height:420px;overflow-y:auto}
+.trail-log .trail-line{display:block;color:var(--muted);font-size:12px}
+.trail-log li b{font-weight:600}

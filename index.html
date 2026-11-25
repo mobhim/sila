@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/thmanyah-serif-display-regular.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/thmanyah-serif-display-black.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" as="image" href="standard.webp" fetchpriority="high">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=15">
 <link rel="stylesheet" href="experience.css?v=4">
 </head>
 <body data-page="site" data-autoplay="view">
@@ -192,6 +192,7 @@
         <small id="aiTag" hidden>يفهم الكلام عبر Claude</small>
       </div>
       <div class="feed" id="feed" aria-live="polite"></div>
+      <form class="ask" id="askForm"><input id="askInput" maxlength="300" autocomplete="off" placeholder="اسأل أو اطلب أي شيء، في أي وقت" aria-label="رسالتك للمساعد"><button class="btn" type="submit">إرسال</button></form>
       <div class="ticker"><span>آخر إجراء:</span><b id="tickText">لا إجراءات بعد</b><span class="tag" id="tickTag" hidden></span></div>
     </div>
 
@@ -431,10 +432,10 @@
     var q = new URLSearchParams(location.search).get('lang'), l = q;
     try { if (q !== 'ar' && q !== 'en') l = localStorage.getItem('sila.lang'); } catch (e) {}
     if (l !== 'ar' && l !== 'en') l = /^ar\b/i.test(navigator.language || '') ? 'ar' : 'en';
-    if (l === 'en') document.write('<script src="i18n.en.js?v=9"><\/script>');
+    if (l === 'en') document.write('<script src="i18n.en.js?v=10"><\/script>');
   })();
 </script>
-<script src="app.min.js?v=11"></script>
-<script src="experience.js?v=3"></script>
+<script src="app.min.js?v=12"></script>
+<script src="experience.js?v=4"></script>
 </body>
 </html>

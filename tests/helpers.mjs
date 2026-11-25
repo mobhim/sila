@@ -10,7 +10,7 @@ export const partnerKey = lang => 'sila.partner.v1' + (lang === 'en' ? '.en' : '
 export function watch(page) {
   const errors = [];
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text() + ' @ ' + (m.location().url || '')); });
-  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message + ' ' + String(e.stack || '').split(/\n/).slice(1, 4).join(' | ')));
   return errors;
 }
 export async function open(page, file, lang, hash) {
@@ -60,21 +60,25 @@ export async function enterNumber(page, number, mode) {
   for (const d of number) await page.locator('.keypad [data-k="' + d + '"]').click();
 }
 export async function sendRequests(page, text) {
+  await showScreen(page);
   await expect(page.locator('#reqText')).toBeVisible();
   if (text) { await page.locator('#reqText').fill(text); await page.locator('#panel .row .btn:not(.line)').click(); }
   else await page.locator('#panel .row .btn.line').click();
 }
 export async function pay(page) {
+  await showScreen(page);
   await expect(page.locator('#panel dl.bill')).toBeVisible();
   await page.locator('#panel .row .btn').first().click();
 }
 export async function pickKey(page, via) {
+  await showScreen(page);
   const b = page.locator('#panel [data-v="' + via + '"]');
   await expect(b).toBeVisible();
   await b.click();
   await expect(page.locator('#stage')).toHaveAttribute('data-phase', 'open');
 }
 export async function reportProblem(page, text) {
+  await showScreen(page);
   await expect(page.locator('#probText')).toBeVisible();
   await page.locator('#probText').fill(text);
   await page.locator('#panel .row .btn:not(.line)').click();
@@ -88,3 +92,17 @@ export async function arrive(page, id, o) {
   await pay(page);
   await pickKey(page, o.key || 'sms');
 }
+
+/* the ask box: the guest writes to the agent at any moment. Resolves when the agent's turn is over. */
+export async function ask(page, text, o) {
+  const tab = page.locator('.x-stage-tabs [data-tab="assist"]');
+  if (await tab.isVisible()) await tab.click();
+  await expect(page.locator('#askInput')).toBeEnabled();
+  const turns = await page.locator('#feed .m.trail').count();
+  await page.locator('#askInput').fill(text);
+  await page.locator('#askInput').press('Enter');
+  await expect(page.locator('#feed .m.trail')).toHaveCount(turns + 1);
+  if (!(o && o.pending)) await expect(page.locator('#askInput')).toBeEnabled();      // pending: the turn is waiting on a staff member
+}
+export const idle = page => expect(page.locator('#askInput')).toBeEnabled();      // the agent has finished its turn
+export const lastTrail = page => page.locator('#feed .m.trail').last();

@@ -163,7 +163,7 @@
     const set = v => {
       stage.dataset.view = v;
       bScreen.setAttribute('aria-selected', String(v === 'screen')); bAssist.setAttribute('aria-selected', String(v === 'assist'));
-      if (v === 'assist') dot.hidden = true;
+      if (v === 'assist') { dot.hidden = true; feed.scrollTop = feed.scrollHeight; }      // what arrived while the screen tab was open is at the end
     };
     bScreen.addEventListener('click', () => set('screen')); bAssist.addEventListener('click', () => set('assist'));
     set('screen');
@@ -178,7 +178,7 @@
     const items = [...steps.children];
     const upd = () => {
       let i = items.findIndex(li => li.classList.contains('on') || li.classList.contains('hold') || li.classList.contains('fail'));
-      if (i < 0) { const done = items.filter(li => li.classList.contains('done')).length; i = Math.min(done, items.length - 1); }
+      if (i < 0) { const done = items.filter(li => li.classList.contains('done') || li.classList.contains('good')).length; i = Math.min(done, items.length - 1); }
       lab.textContent = t('الخطوة ', 'Step ') + (i + 1) + t(' من ', ' of ') + items.length + ' · ' + items[i].textContent.trim();
     };
     upd();
