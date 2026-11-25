@@ -4,12 +4,15 @@
   --bg:#F5F7F2; --surface:#FFFFFF; --surface-2:#EEF1EA; --ink:#0C2A24; --muted:#4C615A; --stroke:#DDE5DC; --stroke-2:#C3CEC5;
   --brand:#0B4D40; --brand-2:#083A30; --on-brand:#D7E8E0; --lime:#C6F24E;
   --ok:#0B7A53; --warn:#9A5B00; --bad:#B8322A;
-  --f-display:"Thmanyah Serif Text",Tahoma,serif;
-  --f-body:"Thmanyah Serif Text",Tahoma,serif;
+  --f-display:"Thmanyah Display Head","Thmanyah Serif Display",Tahoma,serif;
+  --f-body:"Thmanyah Serif Display",Tahoma,serif;
   --ease:cubic-bezier(.4,0,.2,1); --out:cubic-bezier(.16,1,.3,1);
   --shadow:0 30px 60px -32px rgba(8,42,34,.38),0 2px 6px rgba(8,42,34,.06);
 }
-@font-face{font-family:"Thmanyah Serif Text";src:url("fonts/thmanyah-serif-text-medium.otf") format("opentype");font-weight:100 900;font-style:normal;font-display:swap}
+/* خط ثمانية Display: النص Regular (والتأكيد Bold)، والعناوين Black بأي وزن */
+@font-face{font-family:"Thmanyah Serif Display";src:url("fonts/thmanyah-serif-display-regular.woff2") format("woff2");font-weight:100 500;font-style:normal;font-display:swap}
+@font-face{font-family:"Thmanyah Serif Display";src:url("fonts/thmanyah-serif-display-bold.woff2") format("woff2");font-weight:600 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Thmanyah Display Head";src:url("fonts/thmanyah-serif-display-black.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scrollbar-color:var(--stroke-2) transparent}
 body{font-synthesis:none;margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15.5px;line-height:1.75;caret-color:var(--brand);accent-color:var(--brand)}
