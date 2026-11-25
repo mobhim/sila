@@ -90,6 +90,7 @@ const EMPLOYEE: Permission[] = [
   "transactions.viewOwn",
   "movements.record",
   "adjustments.request",
+  "counts.view",
   "counts.enter",
 ];
 

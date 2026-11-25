@@ -1,7 +1,7 @@
 import type { RecordStatus } from "@prisma/client";
 import { db } from "./db";
 import { AppError, isUniqueViolation, notFound } from "./errors";
-import { requirePermission, type Actor } from "./rbac";
+import { branchWhere, requirePermission, type Actor } from "./rbac";
 import { audit, diff } from "./audit";
 
 export interface SupplierInput {
@@ -72,6 +72,7 @@ export async function supplierPerformance(actor: Actor, from: Date, to: Date, su
   requirePermission(actor, "reports.view");
   const reqs = await db.replenishmentRequest.findMany({
     where: {
+      ...branchWhere(actor),
       supplierId: supplierId ?? { not: null },
       sentAt: { gte: from, lte: to },
     },

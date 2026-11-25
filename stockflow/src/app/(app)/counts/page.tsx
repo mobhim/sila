@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { CountStatus } from "@prisma/client";
 import { requireActor } from "@/server/auth/current";
-import { can } from "@/server/rbac";
+import { branchWhere, can, type Actor } from "@/server/rbac";
+import { db } from "@/server/db";
 import { listCounts } from "@/server/counts";
 import { getSelectedBranch } from "@/server/branch-selection";
 import { getFmt } from "@/i18n/server";
@@ -21,12 +22,13 @@ export default async function CountsPage({ searchParams }: { searchParams: Promi
   const tab = (TABS as readonly string[]).includes(sp.status ?? "") ? (sp.status as (typeof TABS)[number]) : "all";
   const branchId = await getSelectedBranch(actor);
   const page = Math.max(1, Number(sp.page) || 1);
-  const data = await listCounts(actor, { branchId: branchId ?? undefined, status: tab === "all" ? undefined : (tab as CountStatus), page });
+  const status = tab === "all" ? undefined : (tab as CountStatus);
+  const data = can(actor, "counts.view") ? await listCounts(actor, { branchId: branchId ?? undefined, status, page }) : await countsToEnter(actor, page);
 
   return (
     <>
       <PageHeader title={t("counts.title")} description={t("counts.description")} actions={can(actor, "counts.manage") ? <ButtonLink href="/counts/new">{t("counts.new")}</ButtonLink> : null} />
-      <Tabs active={tab} items={TABS.map((k) => ({ key: k, label: t(`counts.tabs.${k}`), href: withParams("/counts", sp, { status: k === "all" ? null : k, page: null }) }))} />
+      {can(actor, "counts.view") ? <Tabs active={tab} items={TABS.map((k) => ({ key: k, label: t(`counts.tabs.${k}`), href: withParams("/counts", sp, { status: k === "all" ? null : k, page: null }) }))} /> : null}
       <Card>
         {data.rows.length ? (
           <>
@@ -81,4 +83,24 @@ export default async function CountsPage({ searchParams }: { searchParams: Promi
       </Card>
     </>
   );
+}
+
+/** Employees (counts.enter only) see the open counts of their own branch. */
+async function countsToEnter(actor: Actor, page: number) {
+  const where = { ...branchWhere(actor), status: "IN_PROGRESS" as const };
+  const [rows, total] = await Promise.all([
+    db.inventoryCount.findMany({
+      where,
+      include: {
+        branch: { select: { id: true, name: true, nameAr: true, code: true } },
+        category: { select: { name: true, nameAr: true } },
+        _count: { select: { items: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * 30,
+      take: 30,
+    }),
+    db.inventoryCount.count({ where }),
+  ]);
+  return { rows, total, page, pageSize: 30 };
 }
