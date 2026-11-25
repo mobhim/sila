@@ -90,7 +90,7 @@ export default async function BranchPage({ params }: { params: Promise<{ id: str
 
       {canTx ? (
         <Card className="mt-4">
-          <CardHeader title={t("branches.recentTx")} actions={<Link href={`/transactions?branch=${id}`} className="text-xs font-medium text-brand-700 hover:underline">{t("branches.allTx")}</Link>} />
+          <CardHeader title={t("branches.recentTx")} actions={<Link href={`/transactions?branchId=${id}`} className="text-xs font-medium text-brand-700 hover:underline">{t("branches.allTx")}</Link>} />
           {recent.length ? (
             <div className="table-wrap">
               <table className="tbl">

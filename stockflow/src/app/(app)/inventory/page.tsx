@@ -22,7 +22,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const f = await getFmt();
   const { t } = f;
-  const branchId = await getSelectedBranch(actor);
+  const branchId = await getSelectedBranch(actor, typeof sp.branch === "string" ? sp.branch : null);
   const compare = sp.view === "compare" && actor.role !== "EMPLOYEE";
   const categories = await listCategories();
 

@@ -110,3 +110,14 @@ export async function updateBranch(actor: Actor, id: string, i: BranchInput) {
     throw e;
   }
 }
+
+/** A branch to show stock for when none is specified (owners have no primary branch). */
+export async function defaultBranchFor(actor: Actor, requested?: string | null): Promise<string> {
+  if (requested || actor.role !== "OWNER") {
+    const { workingBranch } = await import("./rbac");
+    return workingBranch(actor, requested);
+  }
+  const b = await db.branch.findFirst({ where: { status: "ACTIVE" }, orderBy: { code: "asc" }, select: { id: true } });
+  if (!b) throw new AppError("branch_required");
+  return b.id;
+}
