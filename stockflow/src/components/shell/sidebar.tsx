@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ICONS } from "./icons";
@@ -74,7 +75,7 @@ export function MobileNav({ groups, brand, footer, label }: { groups: SidebarGro
       <button type="button" className="no-print -ms-1.5 grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden" onClick={() => setOpen(true)} aria-label={label}>
         <Menu className="size-5" />
       </button>
-      {open ? (
+      {open && typeof document !== "undefined" ? createPortal(
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setOpen(false)} />
           <div className="absolute inset-y-0 start-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl">
@@ -89,7 +90,8 @@ export function MobileNav({ groups, brand, footer, label }: { groups: SidebarGro
             </div>
             <div className="border-t border-slate-100 p-3">{footer}</div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
