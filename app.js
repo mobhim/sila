@@ -363,10 +363,11 @@
   let ask = null;
   if (window.claude && typeof window.claude.use === 'function') {
     window.claude.use('sample').then(s => { ask = s; $('#aiTag').hidden = !s; }).catch(() => {});
-  } else if (location.protocol !== 'file:') {
-    /* outside the Claude page the same calls go to the site's own server (api/ask), which holds the API key and the prompts.
-       The server is given the task name and the raw input only; a static host without it leaves the page on its written rules. */
-    const API = ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim() || 'api/ask';
+  } else if (location.protocol !== 'file:' && ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim()) {
+    /* outside the Claude page the same calls go to a server (api/ask) that holds the model key and the prompts; its address is in
+       <meta name="sila-api">. The server is given the task name and the raw input only. With the address empty (a static host
+       such as GitHub Pages) no request is made at all and the page runs on its written rules. */
+    const API = document.querySelector('meta[name="sila-api"]').content.trim();
     const remote = {
       async json(prompt, opts, task, input) {
         const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);

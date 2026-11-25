@@ -31,7 +31,8 @@ http.createServer(async (req, res) => {
     }
     const file = url.pathname === '/' ? '/index.html' : url.pathname === '/admin' ? '/admin.html' : url.pathname === '/landmarks' ? '/landmarks.html' : url.pathname;
     if (req.method !== 'GET' || !PUBLIC.test(file)) { res.writeHead(404); return res.end('Not found'); }
-    const data = await readFile(path.join(ROOT, file));
+    let data = await readFile(path.join(ROOT, file));
+    if (file.endsWith('.html') && aiReady()) data = Buffer.from(data.toString('utf8').replace('<meta name="sila-api" content="">', '<meta name="sila-api" content="api/ask">'));      // this server has the model; a static host leaves the address empty
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-cache' });
     res.end(data);
   } catch (e) {

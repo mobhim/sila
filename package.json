@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "build": "terser app.js --compress --mangle --comments false -o app.min.js"
+    "build": "terser app.js --compress --mangle --comments false -o app.min.js",
+    "test": "playwright test"
   },
   "engines": {
     "node": ">=20.12"
@@ -15,6 +16,7 @@
     "@anthropic-ai/sdk": "^1.8.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "terser": "^5.51.4"
   }
 }
