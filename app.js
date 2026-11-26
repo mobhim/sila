@@ -346,7 +346,7 @@
   /* ---------- understanding what the guest writes ---------- */
   const DEPTS = [__('التدبير الفندقي'), __('خدمة الغرف'), __('الاستقبال'), __('الصيانة'), __('الكونسيرج')];
   const API_URL = ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim()
-    || (/\.github\.io$/.test(location.hostname) ? 'https://sila-kappa.vercel.app/api/ask' : '');
+    || (/\.github\.io$/.test(location.hostname) ? 'https://sila-kappa.vercel.app/api/ask' : /\.vercel\.app$/.test(location.hostname) ? '/api/ask' : '');      // Vercel serves the pages and the API together
   let ask = null;
   if (window.claude && typeof window.claude.use === 'function') {
     window.claude.use('sample').then(s => { ask = s; $('#aiTag').hidden = !s; }).catch(() => {});
