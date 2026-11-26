@@ -160,6 +160,7 @@ npm run eval -- --reply           # يقيس أيضاً الرد الأخير (�
 | `SILA_LLM_KEY` | مفتاح مجاني من Groq (`gsk_`) أو Google AI Studio (`AIza`). يُستخدم إذا لم يوجد مفتاح Claude | — |
 | `SILA_LLM_MODEL` / `SILA_LLM_URL` | تحديد النموذج أو عنوان أي خدمة متوافقة مع OpenAI | يُختار تلقائياً |
 | `ANTHROPIC_API_KEY` | مفتاح Claude | — |
+| `SILA_LLM_REST_MS` | مدة ترك النموذج بعد تجاوز حصته، بالملي ثانية | 60000 |
 | `SILA_MODEL` | نموذج Claude | `claude-opus-5-5` |
 | `SILA_RATE_PER_MIN` | حد الطلبات لكل عنوان في الدقيقة | 30 |
 | `SILA_DAILY_CAP` | حد الطلبات اليومي | 3000 |

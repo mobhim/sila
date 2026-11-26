@@ -194,6 +194,7 @@ test.describe('lib/sila-ai.js · agent task', () => {
     await new Promise(r => server.listen(0, '127.0.0.1', r));
     delete process.env.ANTHROPIC_API_KEY; delete process.env.ANTHROPIC_AUTH_TOKEN; delete process.env.SILA_MOCK; delete process.env.SILA_LLM_MODEL;
     process.env.SILA_LLM_KEY = 'gsk_test_key_never_real';
+    process.env.SILA_LLM_REST_MS = '0';      // a model that just refused is asked again at once, so each case below stands alone
     process.env.SILA_LLM_URL = 'http://127.0.0.1:' + server.address().port;
     ai = await import('../lib/sila-ai.js?agent-test');
   });
