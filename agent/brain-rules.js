@@ -119,6 +119,7 @@
     const brief = q.split(/\s+/).length <= 2;                               // a bare yes or no answers what the agent just offered
     if (state.pending && brief && RE.yes.test(q)) return { intent: 'choice', v: true };
     if (state.pending && brief && RE.no.test(q)) return { intent: 'choice', v: false };
+    if (!state.pending && brief && (RE.yes.test(q) || RE.no.test(q)) && q.length <= 14) return { intent: 'ack' };      // a bare yes or no with nothing on the table is an acknowledgement, not a request
     const topic = infoOf(q);
     if (topic) return { intent: 'info', topic };
     if (RE.keyWant.test(q)) return { intent: 'give_key', via: /email|e-mail|بريد|[إا]يميل/i.test(q) ? 'email' : /\bcard\b|بطاقة/i.test(q) ? 'card' : /sms|رسالة|جوال/i.test(q) ? 'sms' : null };
@@ -201,7 +202,7 @@
   /* what never goes to a model: the three forbidden things, a number that identifies, a bare yes or no to an offer, and, when it is
      all the message asks, a question about tonight's rates, the guest's own bill, or the check-out, tax or refund policy.
      The code answers those, with its own numbers and the hotel's own sentences. */
-  const LOCAL = ['card', 'other_room', 'price', 'identify', 'choice'], MONEY = ['rates', 'bill'], POLICY = ['checkout', 'tax', 'refunds'];
+  const LOCAL = ['card', 'other_room', 'price', 'identify', 'choice', 'ack'], MONEY = ['rates', 'bill'], POLICY = ['checkout', 'tax', 'refunds'];
   function local(raw, state, at) {
     const it = intentOf(raw, state, at), i = it.intent;
     if (LOCAL.includes(i)) return true;
@@ -267,6 +268,7 @@
       case 'move': return b && b.alt ? call('move_room', { to: b.alt, why: 'guest' }, i) : say(b ? 'no_alt' : 'need_id', i);
       case 'late': return call('late_checkout', {}, i);
       case 'code': return call('reissue_key', { via: b.key === 'card' ? 'card' : 'code' }, i);
+      case 'ack': return say('ack', 'answer');
       case 'clean': return call('open_ticket', { kind: 'clean' }, i);
       case 'maint': return call('open_ticket', { kind: 'maint', text: String(input.text).trim().slice(0, 80) }, i);
       case 'bill': return call('get_rates', { scope: b ? 'bill' : 'tonight' }, i);

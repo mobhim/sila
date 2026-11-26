@@ -25,6 +25,7 @@
     get_room_status: 'status', find_booking: 'mine', store_card_data: 'card', open_room_for_other: 'other_room', change_price: 'price' };
   const FLOW = { start_registration: 'register', plan_event: 'event', book_tour: 'tour' };
   const MAX_ACTIONS = 4;
+  const URGE = /صلح|بسرع|عج[ّ]?ل|للحين|لسى|لسه|ما ?زال|متى|وين (الفريق|الصيان)|\bfix (it|this|that)\b|hurry|quick|still|\byet\b|\bwhen\b|any update|how long/i;
   const fail = (why, soft) => { throw Object.assign(new Error('model brain: ' + why), { soft: !!soft }); };      // soft: the model answered, but its words were thrown away
 
   /* every number of three digits or more in a free answer must be one the hotel's code supplied */
@@ -73,6 +74,8 @@
       } else if (t === 'reissue_key') args = { via: a.via === 'card' || (b && b.key === 'card') ? 'card' : 'code' };
       else if (t === 'open_ticket') {
         const kind = a.kind === 'clean' ? 'clean' : 'maint'; intent = kind;
+        /* the guest is pressing about a fault that already has an open ticket ("fix it quickly", "still broken"): no second ticket */
+        if (b && (b.tickets || []).includes(kind) && URGE.test(String(input.text || ''))) return by({ say: 'ticket_open', intent: 'answer', end: true });
         args = kind === 'maint' ? { kind, text: String(a.note || input.shown || '').trim().slice(0, 80) } : { kind };
       } else if (t === 'move_room') {
         if (!b || !b.alt) return by({ say: b ? 'no_alt' : 'need_id', intent: 'move', end: true });

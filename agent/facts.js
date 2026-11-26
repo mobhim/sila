@@ -25,7 +25,10 @@
   /* what states nothing: a question, an offer, or sending the guest to reception. None may carry a number. */
   const DEFER = /\b(do not|don't|cannot|can't|am not able to|unable to|am unable to)\s+(have|know|confirm|see|find|tell|say)\b|\bnot\s+(in|part of|available in|listed in|covered (in|by))\s+(the\s+|our\s+|my\s+)?(hotel('s)?\s+)?(data|records|information)\b|\b(hotel\s+)?data\s+(does not|doesn't|holds no|has no)\b|\b(ask|check with|contact|speak to|speak with)\s+(the\s+|our\s+)?(reception|front desk|staff)\b|\b(reception|front desk)\s+(can|will|would)\s+(confirm|tell|help|answer|advise)\b|\bpass\s+(it|this|that|your\s+(question|request))\s+(on\s+)?to\s+(the\s+)?(reception|front desk)\b|لا (املك|اعرف|استطيع (تاكيد|الجزم)|يوجد (في|لدي|عندي))|ليس (في|لدي|عندي|ضمن)|ما عندي|غير (متوفر|مذكور|موجود)ه? في (بيانات|معلومات)|(بيانات|معلومات) الفندق لا|(راجع|اسال|تواصل مع|كلم) (موظف )?الاستقبال|الاستقبال (يقدر|يستطيع|سيؤكد|يؤكد|يفيدك)|(احول|ارفع|امرر) (سؤالك|طلبك|استفسارك) (ل|الي )(موظف )?الاستقبال/;
   const OFFER = /^(would you like|do you want|shall i|should i|i can (ask|request|check|pass|send|register|log|open)|if you (like|wish|want),? i can)\b|^(هل (تريد|ترغب|تود|تبي|تبغي)|تبي|تبغي|تحب|اقدر (اطلب|احول|اسال|اسجل|ارفع|افتح)|يمكنني (طلب|تحويل|تسجيل|رفع|فتح)|ممكن (اطلب|احول|اسجل|افتح))/;
-  const says = s => !(/\d/.test(s) ? false : (/[?؟]\s*$/.test(s) || DEFER.test(s) || OFFER.test(s)));
+  /* "I cannot process a refund", "we will not extend your check-out", "لا أستطيع تأكيد الاسترجاع": the agent says what it will NOT do.
+     That promises nothing and states no policy, so it is not held to the table (it still may not carry a number). */
+  const DECLINE = /\b(i|we)\s+(cannot|can't|can not|am unable to|are unable to|am not able to|will not|won't|do not|don't)\s+(process|approve|confirm|issue|give|grant|make|do|extend|change|move|cancel|refund|offer|promise|guarantee)\b|(?<![ء-ي])(لا|لن|ما)\s+(يمكنني|يمكننا|استطيع|نستطيع|اقدر|نقدر)\s+(تاكيد|معالجه|تنفيذ|اصدار|منح|الموافقه|اعتماد|تمديد|تغيير|الغاء|استرجاع|استرداد|ارجاع|اعطاء|ضمان)|(?<![ء-ي])(لن|ما راح)\s+(نمدد|امدد|نغير|اغير|ننقل|انقل|نلغي|الغي)/;
+  const says = s => !(/\d/.test(s) ? false : (/[?؟]\s*$/.test(s) || DEFER.test(s) || OFFER.test(s) || DECLINE.test(s)));
 
   /* clock times in a sentence: [hour, minutes, part of day] */
   function times(s) {
@@ -85,8 +88,8 @@
       allow: [/(limit|cap|ceiling|حد|سقف)[^.]{0,30}(hotel|الفندق)|(hotel|الفندق)[^.]{0,30}(limit|cap|حد|سقف)|(computed|calculated|worked out|decided|set|determined|يحسب|يحدد|تحدد|يقرر)[^.]{0,30}(hotel|system|الفندق|النظام)/] },
 
     { key: 'payment',
-      hit: /\bpay(ment|ments|ing|s)?\b|\b(un)?paid\b|\bcharg(e|ed|es)\b|deposit|\bcash\b|\bvisa\b|master ?card|\bmada\b|apple pay|stc pay|installments?|prepa(id|y)|دفع|مدفوع|عربون|تامين|نقدا|كاش|مدي|فيزا|ماستر|تقسيط|قسط/,
-      deny: /deposit|\bcash\b|\bvisa\b|master ?card|\bmada\b|apple pay|stc pay|amex|installments?|pay\s+(later|at (check-?out|departure|the end)|on (departure|arrival)|in (cash|parts))|(no|without)\s+(need to\s+|a\s+)?pay|skip (the )?payment|free of charge|for free|عربون|تامين|نقدا|كاش|مدي|فيزا|ماستر|ابل باي|تقسيط|قسط|(الدفع|تدفع|ادفع) (لاحقا|بعدين|عند المغادره|عند الخروج|وقت الخروج)|بدون دفع|مجانا/,
+      hit: /\bpay(ment|ments|ing|s)?\b|\b(un)?paid\b|\bcharg(e|ed|es)\b|deposit|\bcash\b|\bvisa\b|master ?card|\bmada\b|apple pay|stc pay|installments?|prepa(id|y)|دفع|مدفوع|عربون|تامين|نقدا|كاش|(?<![ء-ي])مدي(?![ء-ي])|فيزا|ماستر|تقسيط|قسط/,
+      deny: /deposit|\bcash\b|\bvisa\b|master ?card|\bmada\b|apple pay|stc pay|amex|installments?|pay\s+(later|at (check-?out|departure|the end)|on (departure|arrival)|in (cash|parts))|(no|without)\s+(need to\s+|a\s+)?pay|skip (the )?payment|free of charge|for free|عربون|تامين|نقدا|كاش|(?<![ء-ي])مدي(?![ء-ي])|فيزا|ماستر|ابل باي|تقسيط|قسط|(الدفع|تدفع|ادفع) (لاحقا|بعدين|عند المغادره|عند الخروج|وقت الخروج)|بدون دفع|مجانا/,
       test(s, o, backed) {
         if (backed) return true;
         const no = /\b(not|unpaid|isn't|hasn't|yet to be)\b[^.]{0,12}\bpaid\b|\bunpaid\b|لم (يدفع|يتم الدفع|تدفع)|غير مدفوع|ما دفعت/.test(s), yes = !no && /\b(already|is|are|was|been|fully)\s+(pre)?paid\b|\bprepaid\b|مدفوع|تم الدفع|دفعت/.test(s);

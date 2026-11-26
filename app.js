@@ -727,7 +727,8 @@
       pending: c.session.confirm ? 'confirm' : c.session.offer ? 'move_offer' : c.stage && stage === 'readiness' && !c.session.waiting ? 'room_choice' : null,
       confirm: c.session.confirm || null,           // calls a model proposed, kept until the guest says yes
       booking: b ? { room: b.room, category: r ? r.cat : '', cat: r ? r.cat : '', nights: b.nights, arrived: !!b.arrivedAt, paid: !!b.paid, key: b.key || null, late: !!b.late,
-        comp: b.comp || 0, refunded: !!b.refunded, roomState: r ? r.state : 'ready', alt: alt ? alt.no : null } : null,
+        comp: b.comp || 0, refunded: !!b.refunded, roomState: r ? r.state : 'ready', alt: alt ? alt.no : null,
+        tickets: S.tickets.filter(t => t.open && t.room === b.room).map(t => t.kind) } : null,
       perms: { reissue: !!S.perms.reissue, ticket: !!S.perms.ticket, move: !!S.perms.move, late: !!S.perms.late, limit: S.perms.limit }
     };
   }
@@ -1087,6 +1088,7 @@
     return k.tool === 'move_room' ? fill(say('النقل إلى الجناح {to} من نفس الفئة وبنفس السعر'), { to: a.to })
       : k.tool === 'late_checkout' ? say('تأخير مغادرتك ساعة إلى 1:00 ظهراً')
       : k.tool === 'compensate' ? say('تسجيل طلب تعويض يحسب نظام الفندق مبلغه')
+      : k.tool === 'request_staff_approval' ? say('رفع طلب استرجاع المبلغ كاملاً إلى موظف الاستقبال')
       : k.tool === 'reissue_key' ? (a.via === 'card' ? say('تبديل مفتاحك ببطاقة من الاستقبال') : say('إلغاء رمز الدخول الحالي وإصدار رمز جديد'))
       : fill(say('إصدار مفتاح جناحك ({via})'), { via: viaText(a.via, say) });
   }).join(say(' و', 'and'));
@@ -1127,6 +1129,8 @@
       case 'room_ready': c.session.waiting = false; return c.bot(c.say('جناحك ') + b.room + c.say(' صار جاهزاً.'), ok);
       case 'ask_key': return c.bot(c.say('كيف تفضّل استلام مفتاحك؟ رمز دخول إلكتروني، أو بطاقة عادية من الاستقبال.'), ok);
       case 'welcome_back': return c.bot(c.say('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.'), ok);
+      case 'ack': return c.bot(c.say('تمام. أنا هنا إن احتجت شيئاً.'), ok);
+      case 'ticket_open': return c.bot(c.say('بلاغك مسجّل والفريق يعمل عليه. أبلّغك فور أي جديد.'), ok);
       case 'offer_move': { const alt = altFor(b); if (!alt) return true; c.session.offer = true; return c.bot(c.say('إن لم ترغب بالانتظار، أنقلك الآن إلى الجناح ') + alt.no + c.say(' من نفس الفئة وبنفس السعر.'), ok); }
       case 'wait_maint': return c.bot(c.say('تمام. فريق الصيانة في الطريق إليك.'), ok);
       case 'no_alt': return c.bot(c.say('لا يوجد جناح بديل جاهز من نفس الفئة الآن.'), ok);

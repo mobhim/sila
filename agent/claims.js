@@ -77,9 +77,14 @@
       }
     return found;
   }
+  /* "sent to a staff member for approval", "تم طلب موافقة موظف": that reports a request, not an approval. It is true whenever
+     this turn put a call in front of staff, whether or not they have answered yet. */
+  const ASKED = /(طلب|بانتظار|انتظار|ارسلت|ارسلنا|حولت|حولنا|رفعت|رفعنا)[^.،؟!]{0,24}(موافقه|موافقة|الموظف|موظف)|\b(sent|passed|forwarded|submitted|referred)\b[^.?!]{0,30}\b(staff|reception|approval)\b|\b(waiting|pending|awaiting)\b[^.?!]{0,20}\b(staff|approval|reception)\b|\brequested\b[^.?!]{0,20}\bapproval\b/;
   function check(text, steps) {
     const ok = (steps || []).filter(s => s && s.tool && s.result && s.result.ok);
+    const asked = (steps || []).some(s => s && s.tool && s.verdict === 'approve') && ASKED.test(tidy(text));
     const unbacked = kinds(text).filter(kind => {
+      if (asked && (kind === 'approve' || kind === 'request' || kind === 'done' || kind === 'refund')) return false;
       if (kind === 'done') return !ok.length;
       if (kind === 'approve') return !ok.some(s => s.approved === true);
       return !ok.some(s => BACK[kind].includes(s.tool));

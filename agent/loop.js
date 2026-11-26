@@ -20,7 +20,7 @@
   /* a model can mishear. These tools change the booking, so when a brain other than the written rules proposes one, it is not
      run: the guest is asked first, and their "yes" comes back as a new turn that the rules brain proposes and the engine decides.
      Reading tools, a ticket and a request to a department need no confirmation. */
-  const CONFIRM = ['move_room', 'late_checkout', 'compensate', 'reissue_key', 'issue_key'];
+  const CONFIRM = ['move_room', 'late_checkout', 'compensate', 'reissue_key', 'issue_key', 'request_staff_approval'];      // a refund request a model read into a message is put to the guest before it reaches staff
 
   async function turn(o) {
     const steps = [], input = Object.assign({}, o.input, { at: o.snapshot().stage });
