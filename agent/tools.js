@@ -74,6 +74,13 @@
       description: 'Ask a staff member to decide something the agent may never decide alone: a full refund.',
       args: { action: { type: 'string', enum: ['refund'] } }
     },
+    /* before a booking exists: a person asking to book haggles over tonight's rate. The discount is computed by the hotel's code
+       from the limits the owner set; a brain can only say that a better price was asked for, and what figure was named. */
+    offer_price: {
+      tier: 'limit', needsBooking: false,
+      description: 'Answer a request for a better nightly rate while booking. The discount, if any, is computed by the hotel’s code inside the owner’s limits.',
+      args: { ask: { type: 'integer', min: 1, max: 100000, optional: true } }
+    },
     /* named so that a brain can say what was asked for; the permission engine refuses all three, always */
     store_card_data: { tier: 'never', needsBooking: false, description: 'Read, keep or repeat payment-card details. Always refused.', args: {} },
     open_room_for_other: {

@@ -74,6 +74,27 @@
         if (!auto) return approve('staff', 'limit_zero', args, { amount: share, limit });
         return allow('limit', args, { amount: auto, limit });
       }
+      case 'offer_price': {
+        /* facts.quote: { rate, nights, round, given, perk } for the stay being booked; facts.deal: the owner's limits.
+           The ladder: the first time a better price is asked for, half of what the owner allows; after that, all of it; never more.
+           A figure the guest names is met only if it is inside the limit, and then exactly, not beyond. */
+        const q = facts && facts.quote, p = (facts && facts.deal) || {};
+        if (!q || !(q.rate > 0) || !(q.nights > 0)) return deny('guard', 'no_quote');
+        if (!p.on) return deny('guard', 'deal_off');
+        const cap = Math.max(0, Math.min(50, Math.round(Number(p.max) || 0))), least = Math.max(1, Math.round(Number(p.minNights) || 1));
+        if (!cap) return deny('guard', 'deal_off');
+        if (q.nights < least) return deny('guard', 'min_nights');
+        const given = Math.max(0, Math.min(cap, Math.round(Number(q.given) || 0)));
+        let pct = (q.round || 1) <= 1 ? Math.ceil(cap / 2) : cap, below = false;
+        if (args.ask) {
+          const need = Math.ceil((1 - args.ask / q.rate) * 100);
+          if (need > cap) below = true;                                             // the figure named is under the owner's floor
+          else pct = Math.max(0, need);
+        }
+        pct = Math.max(given, Math.min(cap, pct));                                  // never above the limit, never worse than what was already offered
+        const perk = !!p.perk && !q.perk && (pct >= cap || below);                  // the extra is kept for when the price can go no lower
+        return allow('limit', args, { pct, amount: Math.round(q.rate * (1 - pct / 100)), limit: cap, last: pct >= cap, moved: pct > given, below, perk });
+      }
       case 'request_staff_approval':
         if (!b.paid) return deny('guard', 'not_paid');
         if (b.refunded) return deny('guard', 'already');
