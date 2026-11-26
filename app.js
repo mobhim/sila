@@ -250,7 +250,9 @@
   /* ---------- assistant feed ---------- */
   const toEnd = () => feed.scrollTo({ top: feed.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
   function push(node) { feed.append(node); toEnd(); return node; }
+  let saying = null;                              // the agent's own sentences in the turn under way
   async function bot(text, ok, extra) {
+    if (saying) saying.push(text);
     const t = el('div', 'm bot typing'); t.append(el('i'), el('i'), el('i')); push(t);
     await sleep(Math.min(1000, 380 + text.length * 9));
     if (!ok()) { t.remove(); return false; }
@@ -367,7 +369,8 @@
     };
     fetch(API).then(r => (r.ok ? r.json() : null)).then(j => {
       if (!j || !j.ai) return;
-      ask = remote; $('#aiTag').hidden = false; $('#helpAi').hidden = false; $('#evAiTag').hidden = false; $('#prAi').hidden = false;
+      ask = remote; modelBrain = AG.brains.model.create({ ask: (task, input) => remote.json('', null, task, input), hotel: hotelContext });
+      $('#aiTag').hidden = false; $('#helpAi').hidden = false; $('#evAiTag').hidden = false; $('#prAi').hidden = false;
     }).catch(() => {});
   }
   const DEPT_IDS = ['housekeeping', 'room_service', 'reception', 'maintenance', 'concierge'];      // what the server calls DEPTS, in the same order
@@ -553,8 +556,37 @@
 
   const AG = window.SILA, RULES = AG.brains.rules;
   /* the optional model brain (agent/brain-model.js) and the partner connector are attached further down; until then the agent runs on its rules and its own data */
-  let modelBrain = null;
-  function modelDown() { modelBrain = null; $('#aiTag').hidden = true; }
+  let modelBrain = null, modelRestAt = 0;
+  const modelOn = () => !!modelBrain && Date.now() >= modelRestAt;
+  function modelDown() { modelRestAt = Date.now() + 60000; }      // quota, a timeout or a bad answer: the rules carry on, and the model is tried again later
+  /* what the model brain is given to answer from. Every number here is computed by this page from the hotel's data. */
+  const LANDMARKS = [
+    [__('الرياض'), __('عاصمة تجمع الأبراج الزجاجية وبيوت الطين.'), [[__('برج المملكة'), __('جسر معلّق في أعلى البرج يطل على المدينة')], [__('حي الطريف في الدرعية'), __('موقع تراث عالمي مبني بالطين')], [__('حافة العالم'), __('جرف صخري شمال غرب الرياض')]]],
+    [__('جدة'), __('بوابة على البحر الأحمر.'), [[__('نافورة الملك فهد'), __('من أعلى النوافير في العالم')], [__('جدة التاريخية (البلد)'), __('بيوت بالرواشين الخشبية، وموقع تراث عالمي')], [__('كورنيش جدة'), __('واجهة بحرية للمشي على البحر الأحمر')]]],
+    [__('العُلا'), __('واحة بين جبال الحجر الرملي.'), [[__('الحِجر'), __('مقابر نبطية منحوتة في الصخر، وأول موقع سعودي في قائمة التراث العالمي')], [__('جبل الفيل'), __('صخرة نحتتها الرياح على هيئة فيل')], [__('قاعة مرايا'), __('مبنى مكسو بالمرايا وسط الوادي')]]],
+    [__('أبها'), __('مدينة الجبال والضباب.'), [[__('جبل السودة'), __('من أعلى قمم المملكة')], [__('قرية رجال ألمع'), __('بيوت حجرية متعددة الطوابق')], [__('تلفريك أبها'), __('عربات معلّقة فوق الجبال')]]],
+    [__('الخبر'), __('واجهة على الخليج العربي.'), [[__('كورنيش الخبر'), __('ممشى بحري يطل عليه برج المياه')], [__('إثراء'), __('مركز الملك عبدالعزيز الثقافي العالمي في الظهران')], [__('جسر الملك فهد'), __('يربط المملكة بالبحرين عبر الخليج')]]]
+  ];
+  const POLICIES = [
+    __('المغادرة الساعة 12:00 ظهراً، وتأخيرها ساعة إلى 1:00 ظهراً ممكن حين يسمح الفندق.'),
+    __('الأسعار لليلة الواحدة، والإجمالي يشمل ضريبة القيمة المضافة 15%.'),
+    __('لا يصدر مفتاح الغرفة قبل إتمام الدفع وجاهزية الغرفة.'),
+    __('المفتاح رمز دخول برسالة SMS أو بالبريد، أو بطاقة من الاستقبال.'),
+    __('النقل يكون إلى غرفة من نفس الفئة وبنفس السعر، وطلبات الإقامة تُحوَّل للقسم المختص.'),
+    __('الاسترجاع الكامل للمبلغ يقرره موظف الاستقبال، والتعويض له حد يضعه الفندق.'),
+    __('المساعد لا يستقبل بيانات البطاقات ولا يغيّر الأسعار ولا يفتح غرفة لغير صاحب الحجز.'),
+    __('هذا نموذج تجريبي: الأسعار والبيانات تجريبية، ولا يُخصم مبلغ ولا تُرسل رسائل.')
+  ];
+  function hotelContext() {
+    const pct = pricePct(), b = cur, t = b && bill(b);
+    return {
+      name: __('فندق صلة التجريبي'), season: PERIODS[periodKey()].label, adjustment: (pct > 0 ? '+' : '') + pct + '%', currency: __('ريال سعودي'),
+      rooms: CATS.map(c => { const mine = S.rooms.filter(r => r.cat === c.key); return mine.length ? { category: c.key, nightlyRate: rateNow(mine[0]), rooms: mine.length, vacantAndReady: mine.filter(r => r.state === 'ready' && !occupant(r.no)).length } : null; }).filter(Boolean),
+      bill: b ? { nightlyRate: t.rate, nights: b.nights, total: money(t.total), paid: !!b.paid } : null,
+      policies: POLICIES,
+      landmarks: LANDMARKS.map(c => ({ city: c[0], about: c[1], places: c[2].map(p => p[0] + ': ' + p[1]) }))
+    };
+  }
   /* ---------- the partner hotel system: reached only through a connector (connectors/connector.js) ----------
      In this demo the connector is the in-browser partner (connectors/demo-partner.js, shown on partner.html).
      The partner is the reference for bookings, room states and rates; Sila sends it what the agent does. */
@@ -661,7 +693,7 @@
     card: __('في الرسالة بيانات بطاقة'), other_room: __('يطلب غرفة ليست له'), price: __('يطلب تغيير السعر'), give_key: __('يطلب المفتاح'), refund: __('يطلب استرجاع المبلغ'),
     comp: __('يطلب تعويضاً'), move: __('يطلب تغيير الغرفة'), late: __('يطلب تأخير المغادرة'), code: __('رمز الدخول لا يعمل'), clean: __('الغرفة تحتاج تنظيفاً'),
     maint: __('عطل في الغرفة'), bill: __('يسأل عن فاتورته'), rates: __('يسأل عن الأسعار'), status: __('يسأل عن جاهزية غرفته'), mine: __('يسأل عن حجزه'),
-    requests: __('طلبات للإقامة'), other: __('ملاحظة للاستقبال'), apology: __('اعتذار عن الإزعاج'), fallback: __('بديل بعد قرار الموظف'), offer_move: __('عرض غرفة بديلة'),
+    requests: __('طلبات للإقامة'), other: __('ملاحظة للاستقبال'), apology: __('اعتذار عن الإزعاج'), answer: __('سؤال عام يُجاب من بيانات الفندق'), fallback: __('بديل بعد قرار الموظف'), offer_move: __('عرض غرفة بديلة'),
     paid: __('النزيل أتمّ الدفع'), choice: __('ردّ على عرض المساعد')
   };
   const WHY = {                                    // why the code said no
@@ -733,14 +765,14 @@
     });
   }
   /* a memory for each booking: what that guest said and what was done, kept under their booking only */
-  function remember(b, tr, steps) {
+  function remember(b, tr, steps, said) {
     if (!b) return;
     const m = S.memory[b.id] || (S.memory[b.id] = []);
-    m.push({ t: nowTime(), heard: short(tr.heard), intent: tr.intent || '', did: steps.filter(s => s.tool).map(s => s.tool + ':' + (s.result && s.result.ok ? 'ok' : s.result && s.result.denied ? 'denied' : s.result && s.result.declined ? 'declined' : 'no')) });
+    m.push({ t: nowTime(), heard: redact(tr.heard).slice(0, 200), said: redact(said || '').slice(0, 300), intent: tr.intent || '', did: steps.filter(s => s.tool).map(s => s.tool + ':' + (s.result && s.result.ok ? 'ok' : s.result && s.result.denied ? 'denied' : s.result && s.result.declined ? 'declined' : 'no')) });
     if (m.length > 20) m.splice(0, m.length - 20);
     save();
   }
-  const historyOf = b => (b && S.memory[b.id] ? S.memory[b.id].slice(-6) : []);
+  const historyOf = b => (b && S.memory[b.id] ? S.memory[b.id].slice(-8) : []);      // the last turns of this booking, and of no other
 
   /* ---------- the tools: each one is the page's own function, reached only through the permission engine ---------- */
   const done = (text, d) => { if (d.verdict === 'allow') log(text, d.tier === 'auto' ? 'auto' : 'limit'); };      // an approved call was already logged by the approval itself
@@ -944,9 +976,10 @@
       : __('هذا خارج ما أستطيع تنفيذه. حوّل طلبك لموظف الاستقبال إن أردت.');
     await bot(text, ok);
   }
-  async function speak(code, state, ok) {
+  async function speak(code, state, ok, text) {
     const b = cur;
     switch (code) {
+      case 'free': return text ? bot(redact(text), ok) : true;      // a model's own words: only ever an answer, never an action
       case 'ask_requests': return bot(__('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok);
       case 'no_requests': session.reqDone = true; return bot(__('لا توجد طلبات الآن. يمكنك طلب أي شيء لاحقاً.'), ok);
       case 'will_notify': session.waiting = true; return bot(__('سأبلغك فور جاهزيته، ولن تحتاج لمراجعة الاستقبال.'), ok);
@@ -977,22 +1010,24 @@
       if (cur) { if (stageOf(cur) === 'stay') setPhase('fix'); setPanel(busyPanel(__('يراجع المساعد بيانات حجزك…'))); hint(''); }
     }
     const tr = trailStart(input), who0 = cur;
+    saying = [];
     let offer0 = session.offer;                     // an offer on the table is answered by this turn, whatever the guest says
     let out = { steps: [] };
     try {
       out = await AG.agent.turn({
-        input, lang, brain: !auto && modelBrain && input.type === 'text' ? modelBrain : RULES, fallback: RULES,
+        input, lang, brain: !auto && modelOn() && input.type === 'text' ? modelBrain : RULES, fallback: RULES,
         snapshot, facts: () => factsFor(cur), history: () => historyOf(cur), alive: ok,
         run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok),
         approve: (call, d) => askStaff(call, d, ok),
         declined: (call, d) => saidNo(call, d, ok),
         refuse: (call, d) => refuse(call, d, ok),
-        speak: (code, state) => speak(code, state, ok),
+        speak: (code, state, text) => speak(code, state, ok, text),
         record: e => { if (offer0) { offer0 = false; session.offer = false; } trailAdd(tr, e); },
         onFallback: () => modelDown()
       });
     } finally { turning = false; }
-    if (ok()) remember(cur || who0, tr, out.steps);
+    const said = saying.join(' '); saying = null;
+    if (ok()) remember(cur || who0, tr, out.steps, said);
     return out;
   }
 
@@ -1797,7 +1832,7 @@
     $('#prPct').textContent = (pct > 0 ? '+' : '') + pct + '%';
     $('#prPct').className = pct > 0 ? 'up' : pct < 0 ? 'down' : '';
     const ai = pr.by === 'ai' && pr.pct != null;
-    $('#prBy').textContent = ai ? __('حدّده Claude') : __('حُسب بالقواعد'); $('#prBy').className = 'tag ' + (ai ? 'limit' : 'staff');
+    $('#prBy').textContent = ai ? __('حدّده النموذج') : __('حُسب بالقواعد'); $('#prBy').className = 'tag ' + (ai ? 'limit' : 'staff');
     $('#prWhy').textContent = ai && pr.reason ? pr.reason : PERIODS[periodKey()].label + ' (' + PERIODS[periodKey()].note + __(') · الإشغال ') + Math.round(d.occ * 100) + '% · ' + (d.wk ? __('ليلة نهاية أسبوع') : __('ليلة وسط الأسبوع')) + '.';
     $('#prAi').hidden = !ask;
     $('#prRates').replaceChildren(...CATS.map(c => {
@@ -1811,7 +1846,7 @@
   let pricing = false;
   async function aiPrice() {                       // Claude sets tonight's adjustment inside the hotel's limits
     if (!ask || pricing || S !== store) return;
-    pricing = true; $('#prBy').textContent = __('Claude يحسب…');
+    pricing = true; $('#prBy').textContent = __('النموذج يحسب…');
     const d = demandNow(), was = S.pricing.period;
     try {
       const out = await ask.json(__('أنت محلل تسعير في فندق. حدّد نسبة تعديل سعر الليلة حسب الطلب.\n')

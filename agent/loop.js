@@ -32,7 +32,7 @@
       if (!act || act.done) break;
 
       if (act.say) {
-        const step = { n, say: String(act.say), intent: act.intent, brain: brain.name };
+        const step = { n, say: String(act.say), intent: act.intent, brain: act.by || brain.name };
         steps.push(step); o.record(Object.assign({ kind: 'say' }, step));
         await o.speak(step.say, state, act.text);
         if (!o.alive()) return { steps, stopped: true };
@@ -42,7 +42,7 @@
 
       const call = { tool: String(act.tool), args: act.args && typeof act.args === 'object' ? act.args : {} };
       const d = SILA.permissions.decide(call, o.facts());
-      const step = { n, tool: call.tool, args: d.args || call.args, intent: act.intent, brain: brain.name, verdict: d.verdict, tier: d.tier, code: d.code, amount: d.amount };
+      const step = { n, tool: call.tool, args: d.args || call.args, intent: act.intent, brain: act.by || brain.name, verdict: d.verdict, tier: d.tier, code: d.code, amount: d.amount };
       if (d.verdict === 'deny') {
         step.result = { ok: false, denied: true, code: d.code };
         o.record(Object.assign({ kind: 'tool' }, step));
