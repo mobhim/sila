@@ -8,7 +8,7 @@ try { process.loadEnvFile(); } catch (e) {}          // .env is optional; withou
 const { handleAsk, corsHeaders, aiReady } = await import('./lib/sila-ai.js');
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url)), PORT = Number(process.env.PORT) || 3000;
-const PUBLIC = /^\/(index\.html|admin\.html|landmarks\.html|app(\.min)?\.js|experience\.(js|css)|i18n\.en\.js|style\.css|manifest\.webmanifest|[\w-]+\.(webp|svg)|landmarks\/\d-\d\.(jpg|png|webp)|media\/[\w-]+\.(webp|jpg|png)|vendor\/gsap\/\w+\.min\.js|fonts\/[\w-]+\.woff2)$/;      // only the site's own files are served
+const PUBLIC = /^\/(index\.html|admin\.html|landmarks\.html|partner\.html|(app|partner)(\.min)?\.js|(agent|connectors)\/[\w-]+\.js|experience\.(js|css)|i18n\.en\.js|style\.css|manifest\.webmanifest|[\w-]+\.(webp|svg)|landmarks\/\d-\d\.(jpg|png|webp)|media\/[\w-]+\.(webp|jpg|png)|vendor\/gsap\/\w+\.min\.js|fonts\/[\w-]+\.woff2)$/;      // only the site's own files are served
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
 
 const readBody = req => new Promise((resolve, reject) => {
@@ -29,9 +29,10 @@ http.createServer(async (req, res) => {
       res.writeHead(out.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...cors });
       return res.end(JSON.stringify(out.body));
     }
-    const file = url.pathname === '/' ? '/index.html' : url.pathname === '/admin' ? '/admin.html' : url.pathname === '/landmarks' ? '/landmarks.html' : url.pathname;
+    const file = url.pathname === '/' ? '/index.html' : url.pathname === '/admin' ? '/admin.html' : url.pathname === '/landmarks' ? '/landmarks.html' : url.pathname === '/partner' ? '/partner.html' : url.pathname;
     if (req.method !== 'GET' || !PUBLIC.test(file)) { res.writeHead(404); return res.end('Not found'); }
-    const data = await readFile(path.join(ROOT, file));
+    let data = await readFile(path.join(ROOT, file));
+    if (file.endsWith('.html') && aiReady()) data = Buffer.from(data.toString('utf8').replace('<meta name="sila-api" content="">', '<meta name="sila-api" content="api/ask">'));      // this server has the model; a static host leaves the address empty
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-cache' });
     res.end(data);
   } catch (e) {

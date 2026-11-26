@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>صلة · نظام الفندق الشريك (تجريبي)</title>
+<meta name="theme-color" content="#0B4D40">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="media/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preload" href="fonts/thmanyah-serif-display-regular.woff2?v=2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/thmanyah-serif-display-black.woff2?v=2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css?v=16">
+</head>
+<body data-page="partner" data-title-en="Sila · Partner hotel system (demo)">
+<div class="adm" dir="rtl" lang="ar">
+  <aside class="adm-side">
+    <a class="logo" href="index.html" aria-label="موقع صلة" data-en-label="Sila site"><img class="mark" src="logo.svg" alt="" width="38" height="38"><b data-en="Sila">صلة</b></a>
+    <p class="adm-role" data-en="Partner hotel system · demo">نظام الفندق الشريك · تجريبي</p>
+    <nav class="adm-nav" aria-label="صفحات صلة" data-en-label="Sila pages">
+      <a href="index.html#syncSec" target="_blank" rel="noopener" data-en="Guest screen ↗">شاشة النزيل ↗</a>
+      <a href="admin.html#trail" target="_blank" rel="noopener" data-en="Sila admin console ↗">لوحة إدارة صلة ↗</a>
+    </nav>
+    <div class="adm-foot">
+      <button class="lang" type="button" id="langBtn" lang="en" aria-label="Switch to English">EN</button>
+    </div>
+  </aside>
+
+  <main class="adm-main">
+    <header class="adm-head">
+      <div>
+        <h1 data-en="Partner hotel system">نظام الفندق الشريك</h1>
+        <p class="sub" data-en="A demo system with its own data, kept apart from Sila’s. What you change here reaches Sila’s agent at once, and what the agent does shows up here.">نظام تجريبي ببياناته الخاصة، منفصل عن بيانات صلة. ما تعدّله هنا يصل إلى وكيل صلة فوراً، وما ينفّذه الوكيل يظهر هنا.</p>
+      </div>
+      <div class="link-box">
+        <span class="sync-state" id="linkState" aria-live="polite"></span>
+        <button class="big solid" type="button" id="linkBtn"></button>
+      </div>
+    </header>
+    <p class="adm-warn" data-en="This is a simulation of a partner hotel’s system, running inside this browser. It is not a real product and does not imitate the interface of any particular system.">هذه محاكاة لنظام فندق شريك تعمل داخل هذا المتصفح. ليست منتجاً حقيقياً، ولا تحاكي واجهة أي نظام بعينه.</p>
+
+    <div class="adm-grid two">
+      <div class="box">
+        <h2 data-en="Rooms and rates">الغرف والأسعار</h2>
+        <p class="cap" data-en="Tap a room to switch its state: ready, being prepared, maintenance. The rate is the base nightly rate of the category; Sila applies its demand adjustment on top.">اضغط الغرفة لتبديل حالتها: جاهزة، قيد التجهيز، صيانة. السعر هو السعر الأساسي لليلة في الفئة، وصلة تطبّق فوقه تعديل الطلب.</p>
+        <div class="rooms" id="pRooms"></div>
+        <div class="p-rates" id="pRates"></div>
+      </div>
+      <div class="box">
+        <h2 data-en="Received from Sila">ما وصل من صلة</h2>
+        <p class="cap" data-en="Check-ins, requests, tickets and room changes the agent carried out.">تسجيل الوصول، الطلبات، البلاغات، وتغييرات الغرف التي نفّذها الوكيل.</p>
+        <ul class="log" id="pInbox"></ul>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th data-en="Guest">النزيل</th><th data-en="ID and mobile">الهوية والجوال</th><th data-en="Room">الغرفة</th><th data-en="Nights">الليالي</th><th data-en="Arrival">الوصول</th><th></th></tr></thead>
+        <tbody id="pRows"></tbody>
+      </table>
+    </div>
+
+    <form id="pAdd" class="box" novalidate>
+      <h2 data-en="New booking at the partner">حجز جديد عند الشريك</h2>
+      <div class="fields">
+        <label class="f"><span data-en="Guest name">اسم النزيل</span><input id="pName" autocomplete="off" maxlength="40"></label>
+        <label class="f"><span data-en="ID number (10 digits)">رقم الهوية (10 أرقام)</span><input id="pId" class="ltr" inputmode="numeric" autocomplete="off" maxlength="10"></label>
+        <label class="f"><span data-en="Mobile number">رقم الجوال</span><input id="pPhone" class="ltr" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="05xxxxxxxx"></label>
+        <label class="f"><span data-en="Room">الغرفة</span><select id="pRoom"></select></label>
+        <label class="f"><span data-en="Nights">عدد الليالي</span><input id="pNights" class="ltr" inputmode="numeric" autocomplete="off" maxlength="2" value="1"></label>
+      </div>
+      <div class="form-end">
+        <button class="big solid" type="submit" data-en="Add the booking">إضافة الحجز</button>
+        <p class="msg" id="pMsg" aria-live="polite"></p>
+      </div>
+    </form>
+
+    <div class="box">
+      <h2 data-en="Sync log">سجل المزامنة</h2>
+      <p class="cap" data-en="Kept by Sila’s connector: what was sent to this system, what was received from it, and when.">يحتفظ به موصّل صلة: ماذا أُرسل إلى هذا النظام، ماذا استُقبل منه، ومتى.</p>
+      <ul class="log" id="pSync"></ul>
+    </div>
+
+    <div class="form-end">
+      <button class="pillbtn" id="pReset" type="button" data-en="Restore the partner’s sample data">استعادة بيانات الشريك التجريبية</button>
+    </div>
+  </main>
+</div>
+<script src="partner.min.js?v=1"></script>
+</body>
+</html>

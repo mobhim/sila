@@ -71,7 +71,7 @@
   const freshState = () => ({
     rooms: ROOMS0.map(r => ({ ...r })), bookings: BOOK0.map(blank),
     perms: { reissue: true, ticket: true, move: true, late: true, limit: 150, priceMin: 25, priceMax: 40 },
-    pricing: { period: 'auto', pct: null, reason: '', by: 'rules' }, log: [], approvals: [], tickets: [], ticketN: 0
+    pricing: { period: 'auto', pct: null, reason: '', by: 'rules' }, log: [], approvals: [], tickets: [], ticketN: 0, trail: [], memory: {}
   });
   const KEY = 'miftah.sim.v4' + (EN ? '.en' : '');      // each language keeps its own sample data, so names and logs never mix
   let store;
@@ -82,6 +82,8 @@
     if (!Array.isArray(s.approvals)) s.approvals = [];
     if (!Array.isArray(s.tickets)) { s.tickets = []; s.ticketN = 0; }
     if (!s.decided || typeof s.decided !== 'object') s.decided = {};
+    if (!Array.isArray(s.trail)) s.trail = [];
+    if (!s.memory || typeof s.memory !== 'object' || Array.isArray(s.memory)) s.memory = {};
     return s;
   };
   shape(store);
@@ -91,7 +93,7 @@
   if (!ADMIN) save();
 
   const VAT = 0.15, STATE = { ready: __('جاهز'), prep: __('قيد التجهيز'), maint: __('صيانة') }, NEXT = { ready: 'prep', prep: 'maint', maint: 'ready' };
-  const TIER = { auto: __('تلقائي'), limit: __('ضمن الحد'), staff: __('موظف'), wait: __('بانتظار موافقة'), ok: __('بموافقة موظف'), no: __('مرفوض') };
+  const TIER = { auto: __('تلقائي'), limit: __('ضمن الحد'), staff: __('موظف'), wait: __('بانتظار موافقة'), ok: __('بموافقة موظف'), no: __('مرفوض'), never: __('ممنوع') };
   const roomOf = b => S.rooms.find(r => r.no === b.room);
   const occupant = no => S.bookings.find(b => b.room === no);
   const altFor = b => { const r = roomOf(b); return r && S.rooms.find(x => x.no !== r.no && x.cat === r.cat && x.state === 'ready' && !occupant(x.no)); };
@@ -121,7 +123,7 @@
     return Math.max(lo, Math.min(hi, v));
   }
   const rateNow = r => Math.round(r.rate * (1 + pricePct() / 100));
-  const bill = b => { const r = roomOf(b), base = r ? r.rate : 600, pct = (b.paid || b.quoted) && b.pct != null ? b.pct : pricePct(),       // a paid or quoted price stays fixed
+  const bill = b => { const r = roomOf(b), base = b.paid && b.rateBase ? b.rateBase : r ? r.rate : 600, pct = (b.paid || b.quoted) && b.pct != null ? b.pct : pricePct(),       // a paid or quoted price stays fixed
        rate = Math.round(base * (1 + pct / 100)), sub = rate * b.nights, vat = sub * VAT; return { base, pct, rate, sub, vat, total: sub + vat }; };
   const dateFmt = new Intl.DateTimeFormat(EN ? 'en-GB' : 'ar-SA-u-ca-gregory-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
   const checkout = b => { const d = new Date(); d.setDate(d.getDate() + b.nights); return dateFmt.format(d) + __('، ') + (b.late ? '1:00' : '12:00') + __(' ظهراً'); };
@@ -248,7 +250,9 @@
   /* ---------- assistant feed ---------- */
   const toEnd = () => feed.scrollTo({ top: feed.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
   function push(node) { feed.append(node); toEnd(); return node; }
+  let saying = null;                              // the agent's own sentences in the turn under way
   async function bot(text, ok, extra) {
+    if (saying) saying.push(text);
     const t = el('div', 'm bot typing'); t.append(el('i'), el('i'), el('i')); push(t);
     await sleep(Math.min(1000, 380 + text.length * 9));
     if (!ok()) { t.remove(); return false; }
@@ -341,33 +345,17 @@
 
   /* ---------- understanding what the guest writes ---------- */
   const DEPTS = [__('التدبير الفندقي'), __('خدمة الغرف'), __('الاستقبال'), __('الصيانة'), __('الكونسيرج')];
-  const REQ_RULES = [
-    [/سرير|وساد|مناشف|منشف|تنظيف|بطاني|شرشف|مهد|\b(bed|pillows?|towels?|clean\w*|blankets?|sheets?|crib|cot)\b/i, DEPTS[0]],
-    [/[إا]فطار|فطور|عشاء|غداء|طعام|قهوة|شاي|وجبة|ماء|\b(breakfast|dinner|lunch|food|coffee|tea|meal|water)\b/i, DEPTS[1]],
-    [/مكيف|تكييف|[إا]نارة|[إا]ضاءة|تلفاز|تلفزيون|[إا]نترنت|واي ?فاي|صيانة|\b(ac|air ?con\w*|lights?|lighting|tv|wi-?fi|internet|maintenance)\b/i, DEPTS[3]],
-    [/سيارة|مطار|تاكسي|توصيل|جولة|مطعم|موقف|\b(car|airport|taxi|transfer|tour|restaurant|parking)\b/i, DEPTS[4]]
-  ];
-  function reqByRules(text) {
-    const items = text.split(/[،,.\n؛;]+/).map(s => s.trim()).filter(Boolean).slice(0, 6)
-      .map(s => ({ request: s.slice(0, 80), dept: (REQ_RULES.find(r => r[0].test(s)) || [0, DEPTS[2]])[1] }));
-    return { items, reply: __('سجّلت طلباتك وحوّلتها للأقسام المختصة:') };
-  }
-  const KINDS = ['code', 'maint', 'clean', 'refund', 'other'];
-  function kindByRules(t) {
-    if (/استرجاع|استرداد|رجّع|رجع فلوس|فلوسي|[إا]لغاء|[أا]لغي|refund|money back|cancel/i.test(t)) return 'refund';
-    if (/رمز|كود|الباب|يفتح|قفل|بطاقة|مفتاح|\b(code|door|open|lock|card|key)\b/i.test(t)) return 'code';
-    if (/نظيف|نظاف|وسخ|متسخ|رائحة|قذر|clean|dirty|smell|filthy/i.test(t)) return 'clean';
-    if (/مكيف|تكييف|صيانة|عطل|خربان|معطل|لا يعمل|ما يشتغل|ماء|سباكة|تسريب|كهرب|[إا]نارة|[إا]ضاءة|تلفاز|[إا]نترنت|\b(ac|air ?con\w*|tv)\b|maintenance|broken|not working|water|plumbing|leak|electric|light|internet|wi-?fi/i.test(t)) return 'maint';
-    return 'other';
-  }
+  const API_URL = ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim()
+    || (/\.github\.io$/.test(location.hostname) ? 'https://sila-kappa.vercel.app/api/ask' : '');
   let ask = null;
   if (window.claude && typeof window.claude.use === 'function') {
     window.claude.use('sample').then(s => { ask = s; $('#aiTag').hidden = !s; }).catch(() => {});
-  } else if (location.protocol !== 'file:') {
-    /* outside the Claude page the same calls go to the site's own server (api/ask), which holds the API key and the prompts.
-       The server is given the task name and the raw input only; a static host without it leaves the page on its written rules. */
-    const API = ((document.querySelector('meta[name="sila-api"]') || {}).content || '').trim()
-      || (/\.github\.io$/.test(location.hostname) ? 'https://sila-kappa.vercel.app/api/ask' : 'api/ask');       // GitHub Pages has no server: it uses the copy on Vercel
+  } else if (location.protocol !== 'file:' && API_URL) {
+    /* outside the Claude page the same calls go to a server (api/ask) that holds the model key and the prompts.
+       Its address comes from <meta name="sila-api">; the local server (npm start) fills that in itself, and on GitHub Pages,
+       which has no server, the copy on Vercel is used. Anywhere else there is no address, so no request is made at all and
+       the page runs on its written rules. The server is given the task name and the raw input only. */
+    const API = API_URL;
     const remote = {
       async json(prompt, opts, task, input) {
         const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
@@ -381,7 +369,8 @@
     };
     fetch(API).then(r => (r.ok ? r.json() : null)).then(j => {
       if (!j || !j.ai) return;
-      ask = remote; $('#aiTag').hidden = false; $('#helpAi').hidden = false; $('#evAiTag').hidden = false; $('#prAi').hidden = false;
+      ask = remote; modelBrain = AG.brains.model.create({ ask: (task, input) => remote.json('', null, task, input), hotel: hotelContext });
+      $('#aiTag').hidden = false; $('#helpAi').hidden = false; $('#evAiTag').hidden = false; $('#prAi').hidden = false;
     }).catch(() => {});
   }
   const DEPT_IDS = ['housekeeping', 'room_service', 'reception', 'maintenance', 'concierge'];      // what the server calls DEPTS, in the same order
@@ -389,30 +378,6 @@
   function aiOff(e) {
     if (e && ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'].includes(e.code)) { ask = null; $('#aiTag').hidden = true; }
   }
-  async function understand(text) {
-    if (!ask) return reqByRules(text);
-    try {
-      const out = await ask.json(__('أنت مساعد استقبال في فندق. ') + GUARD
-        + __('استخرج كل طلب على حدة بصياغة قصيرة، وحدّد القسم المسؤول عنه من هذه القائمة فقط: ') + DEPTS.join(__('، ')) + '.\n'
-        + __('أعد كائن JSON واحداً فقط بهذا الشكل: {"reply":"جملة قصيرة ودودة بالعربية تؤكد تسجيل الطلبات دون وعد بموعد أو سعر","items":[{"request":"سرير إضافي","dept":"التدبير الفندقي"}]}\n')
-        + '<<<' + text.slice(0, 300) + '>>>', { modelTier: 'quick' }, 'requests', { text: text.slice(0, 300) });
-      const items = (out && Array.isArray(out.items) ? out.items : []).slice(0, 6)
-        .map(i => ({ request: String((i && i.request) || '').slice(0, 80), dept: DEPTS.includes(i && i.dept) ? i.dept : DEPTS[DEPT_IDS.indexOf(i && i.dept)] || DEPTS[2] }))
-        .filter(i => i.request);
-      if (!items.length) return reqByRules(text);
-      return { items, reply: String((out && out.reply) || '').slice(0, 200) || __('سجّلت طلباتك:') };
-    } catch (e) { aiOff(e); return reqByRules(text); }
-  }
-  async function classify(text) {
-    if (!ask) return kindByRules(text);
-    try {
-      const out = await ask.json(__('أنت مساعد استقبال في فندق. ') + GUARD
-        + __('صنّف مشكلة النزيل إلى واحد فقط من: code (رمز الدخول أو المفتاح أو الباب لا يفتح)، maint (عطل في الغرفة مثل التكييف أو الماء أو الكهرباء)، clean (نظافة الغرفة)، refund (يطلب استرجاع المبلغ أو الإلغاء)، other (غير ذلك).\n')
-        + __('أعد كائن JSON واحداً فقط بهذا الشكل: {"kind":"maint"}\n<<<') + text.slice(0, 300) + '>>>', { modelTier: 'quick' }, 'classify', { text: text.slice(0, 300) });
-      return out && KINDS.includes(out.kind) ? out.kind : kindByRules(text);
-    } catch (e) { aiOff(e); return kindByRules(text); }
-  }
-
   /* ---------- hotel side: log, approvals, rooms, suites ---------- */
   const logEl = $('#log'), apprEl = $('#appr'), roomsEl = $('#rooms'), rowsEl = $('#rows'), msgEl = $('#formMsg');
   let waiters = {}, pendingAppr = {}, apprN = 0;
@@ -482,7 +447,8 @@
       c.addEventListener('click', () => {
         const no = r.no; if (demoOn) takeOver();
         const rr = S.rooms.find(x => x.no === no); if (!rr) return;
-        const next = NEXT[rr.state]; setRoomState(no, next); log(__('الجناح ') + no + __(' صار: ') + STATE[next], 'staff');
+        const from = rr.state, next = NEXT[from]; setRoomState(no, next); log(__('الجناح ') + no + __(' صار: ') + STATE[next], 'staff');
+        partnerSend('room_state', null, { room: no, from, to: next });
       });
       roomsEl.append(c);
     });
@@ -532,6 +498,7 @@
         const oldRoom = roomOf(bb);
         if (!S.rooms.some(r => r.no === v)) S.rooms.push({ no: v, cat: oldRoom ? oldRoom.cat : CATS[0].key, rate: oldRoom ? oldRoom.rate : 600, state: 'ready' });
         const old = bb.room; bb.room = v; save(); renderRooms(); renderRows(); refreshScene();
+        partnerSend('room_change', bb, { from: old, to: v });
         say(__('نُقل ') + bb.name + __(' من الغرفة ') + old + __(' إلى ') + v + __('، وتحدّث رمز الحجز تلقائياً.'), 'ok');
       });
       roomTd.append(roomIn);
@@ -574,7 +541,7 @@
     adopt(fresh);
     if (S !== store) return;                      // the film is playing on its own copy; the real data waits behind it
     renderHotel(); refreshScene();
-    Object.keys(waiters).forEach(no => { const r = store.rooms.find(x => x.no === no); if (r && r.state === 'ready') { const go = waiters[no]; delete waiters[no]; go(); } });
+    wakeWaiters(); stageRefresh();
     let heard = false;
     Object.keys(pendingAppr).forEach(aid => {
       if (!(aid in store.decided)) return;
@@ -583,25 +550,232 @@
     if (heard) save();
   });
   function renderHotel() {
-    renderPerms(); renderPricing(); renderRooms(); renderLog(); renderAppr(); renderTickets(); renderRows();
+    renderPerms(); renderPricing(); renderRooms(); renderLog(); renderTrail(); renderSync(); renderAppr(); renderTickets(); renderRows();
     $('#modeNote').textContent = S === store ? __('التسعير، صلاحيات المساعد، حالة الغرف، وكل ما نفّذه. البيانات تجريبية ومحفوظة في متصفحك.') : __('التسعير، صلاحيات المساعد، حالة الغرف، وكل ما نفّذه. العرض يعمل على نسخة مؤقتة تُعاد كل جولة.');
   }
 
-  /* ---------- the assistant's actions (each one checks its permission) ---------- */
-  async function allowed(perm, text, ok) {            // auto if the hotel allows it, otherwise ask staff
-    if (S.perms[perm]) return true;
-    setPanel(busyPanel(__('بانتظار موافقة الموظف…'))); hint(__('الطلب الآن عند موظف الاستقبال في لوحة الإدارة.'), 'warn');
-    if (!await bot(__('هذا الإجراء خارج صلاحياتي الحالية. أرسلته للموظف مع ملخص الحالة.'), ok)) return null;
-    const yes = await approval(text);
-    hint(''); return ok() ? yes : null;
+  const AG = window.SILA, RULES = AG.brains.rules;
+  /* the optional model brain (agent/brain-model.js) and the partner connector are attached further down; until then the agent runs on its rules and its own data */
+  let modelBrain = null, modelRestAt = 0;
+  const modelOn = () => !!modelBrain && Date.now() >= modelRestAt;
+  function modelDown() { modelRestAt = Date.now() + 60000; }      // quota, a timeout or a bad answer: the rules carry on, and the model is tried again later
+  /* what the model brain is given to answer from. Every number here is computed by this page from the hotel's data. */
+  const LANDMARKS = [
+    [__('الرياض'), __('عاصمة تجمع الأبراج الزجاجية وبيوت الطين.'), [[__('برج المملكة'), __('جسر معلّق في أعلى البرج يطل على المدينة')], [__('حي الطريف في الدرعية'), __('موقع تراث عالمي مبني بالطين')], [__('حافة العالم'), __('جرف صخري شمال غرب الرياض')]]],
+    [__('جدة'), __('بوابة على البحر الأحمر.'), [[__('نافورة الملك فهد'), __('من أعلى النوافير في العالم')], [__('جدة التاريخية (البلد)'), __('بيوت بالرواشين الخشبية، وموقع تراث عالمي')], [__('كورنيش جدة'), __('واجهة بحرية للمشي على البحر الأحمر')]]],
+    [__('العُلا'), __('واحة بين جبال الحجر الرملي.'), [[__('الحِجر'), __('مقابر نبطية منحوتة في الصخر، وأول موقع سعودي في قائمة التراث العالمي')], [__('جبل الفيل'), __('صخرة نحتتها الرياح على هيئة فيل')], [__('قاعة مرايا'), __('مبنى مكسو بالمرايا وسط الوادي')]]],
+    [__('أبها'), __('مدينة الجبال والضباب.'), [[__('جبل السودة'), __('من أعلى قمم المملكة')], [__('قرية رجال ألمع'), __('بيوت حجرية متعددة الطوابق')], [__('تلفريك أبها'), __('عربات معلّقة فوق الجبال')]]],
+    [__('الخبر'), __('واجهة على الخليج العربي.'), [[__('كورنيش الخبر'), __('ممشى بحري يطل عليه برج المياه')], [__('إثراء'), __('مركز الملك عبدالعزيز الثقافي العالمي في الظهران')], [__('جسر الملك فهد'), __('يربط المملكة بالبحرين عبر الخليج')]]]
+  ];
+  const POLICIES = [
+    __('المغادرة الساعة 12:00 ظهراً، وتأخيرها ساعة إلى 1:00 ظهراً ممكن حين يسمح الفندق.'),
+    __('الأسعار لليلة الواحدة، والإجمالي يشمل ضريبة القيمة المضافة 15%.'),
+    __('لا يصدر مفتاح الغرفة قبل إتمام الدفع وجاهزية الغرفة.'),
+    __('المفتاح رمز دخول برسالة SMS أو بالبريد، أو بطاقة من الاستقبال.'),
+    __('النقل يكون إلى غرفة من نفس الفئة وبنفس السعر، وطلبات الإقامة تُحوَّل للقسم المختص.'),
+    __('الاسترجاع الكامل للمبلغ يقرره موظف الاستقبال، والتعويض له حد يضعه الفندق.'),
+    __('المساعد لا يستقبل بيانات البطاقات ولا يغيّر الأسعار ولا يفتح غرفة لغير صاحب الحجز.'),
+    __('هذا نموذج تجريبي: الأسعار والبيانات تجريبية، ولا يُخصم مبلغ ولا تُرسل رسائل.')
+  ];
+  function hotelContext() {
+    const pct = pricePct(), b = cur, t = b && bill(b);
+    return {
+      name: __('فندق صلة التجريبي'), season: PERIODS[periodKey()].label, adjustment: (pct > 0 ? '+' : '') + pct + '%', currency: __('ريال سعودي'),
+      rooms: CATS.map(c => { const mine = S.rooms.filter(r => r.cat === c.key); return mine.length ? { category: c.key, nightlyRate: rateNow(mine[0]), rooms: mine.length, vacantAndReady: mine.filter(r => r.state === 'ready' && !occupant(r.no)).length } : null; }).filter(Boolean),
+      bill: b ? { nightlyRate: t.rate, nights: b.nights, total: money(t.total), paid: !!b.paid } : null,
+      policies: POLICIES,
+      landmarks: LANDMARKS.map(c => ({ city: c[0], about: c[1], places: c[2].map(p => p[0] + ': ' + p[1]) }))
+    };
   }
-  async function compensate(b, ok) {
-    if (!S.perms.limit || b.comp) return true;
-    const amt = Math.min(S.perms.limit, Math.round(bill(b).total * 0.1));
-    b.comp = amt; save(); renderRows();
-    log(__('تعويض النزيل ') + b.name + __(' بمبلغ ') + money(amt) + __(' (الحد ') + S.perms.limit + __(' ر.س)'), 'limit');
-    return bot(__('واعتذاراً عن الإزعاج عوّضتك بمبلغ ') + money(amt) + __(' يُعاد إلى وسيلة الدفع نفسها.'), ok);
+  /* ---------- the partner hotel system: reached only through a connector (connectors/connector.js) ----------
+     In this demo the connector is the in-browser partner (connectors/demo-partner.js, shown on partner.html).
+     The partner is the reference for bookings, room states and rates; Sila sends it what the agent does. */
+  const SYNC_KEY = 'sila.sync.v1' + (EN ? '.en' : '');
+  const saveStore = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };      // the real data, also while the film plays on its copy
+  function adoptLatest() {
+    let fresh = null; try { fresh = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    if (fresh && Array.isArray(fresh.rooms) && Array.isArray(fresh.bookings) && fresh.perms && fresh.pricing) adopt(fresh);
   }
+  const REFRESH = {};
+  let presented = '';
+  function stageRefresh() {                       // the data under the screen changed: show the step the booking is at now
+    if (!cur || !askResolve || turning || session.waiting || S !== store) return;
+    const now = stageOf(cur);
+    if (now === presented && now !== 'payment' && now !== 'readiness') return;
+    const go = askResolve; askResolve = null; go(REFRESH);
+  }
+  function wakeWaiters() {
+    Object.keys(waiters).forEach(no => { const r = store.rooms.find(x => x.no === no); if (r && r.state === 'ready') { const go = waiters[no]; delete waiters[no]; go(); } });
+  }
+  const SYNC = LM_PAGE ? null : AG.sync.create({
+    connector: AG.demoPartner.open(lang).connector, key: SYNC_KEY,
+    refresh: adoptLatest, local: () => store,
+    makeBooking: rb => blank({ id: rb.id, name: rb.name, room: rb.room, nights: rb.nights, eta: rb.eta, phone: rb.phone, email: rb.email }),
+    commit(changes) {
+      saveStore();
+      if (S !== store || !changes.length) return;
+      renderHotel();
+      if (cur && !store.bookings.includes(cur)) { userAct(); clearStage(); return; }      // the partner cancelled the booking on screen
+      if (cur && roomShown && roomShown !== cur.room) {
+        roomShown = cur.room; const r = roomOf(cur); setScene(catIdx(r ? r.cat : '')); renderId();
+        push(el('div', 'm bot', fill(__('حدّث نظام الفندق غرفتك إلى الجناح {room}.'), { room: cur.room })));
+      }
+      refreshScene(); wakeWaiters(); stageRefresh();
+    }
+  });
+  function partnerSend(type, b, p) {
+    if (S !== store || !SYNC) return;               // the film never reaches the partner
+    if (b && b.src !== 'partner') { SYNC.note('skip.local', { name: b.name }); return; }
+    SYNC.send(type, Object.assign({ bookingId: b ? b.id : undefined, name: b ? b.name : undefined, room: b ? b.room : p.room }, type === 'ticket' ? { ticket: p } : p));
+  }
+  const SYNC_TAG = { out: 'auto', in: 'limit', conflict: 'wait', dup: 'staff', queued: 'wait', link: 'staff', rejected: 'no', skip: 'staff' };
+  function renderSync() {
+    if (!SYNC) return;
+    const s = SYNC.state(), on = SYNC.online(), st = $('#syncState');
+    st.textContent = on ? __('متصل بنظام الشريك') : __('الشريك مفصول: صلة تكمل ببياناتها') + (s.outbox.length ? ' · ' + s.outbox.length + __(' عملية تنتظر') : '');
+    st.className = 'sync-state ' + (on ? 'on' : 'off');
+    const ul = $('#syncLog'); ul.textContent = '';
+    if (!s.log.length) ul.append(el('li', '', __('لا مزامنة بعد. ما يُرسل للشريك وما يُستقبل منه يظهر هنا.')));
+    s.log.forEach(e => { const li = el('li'); li.append(el('time', '', e.t), el('span', '', AG.sync.text(e, lang)), el('span', 'tag ' + (SYNC_TAG[e.dir] || 'staff'), AG.sync.dirLabel(e.dir, lang))); ul.append(li); });
+  }
+  if (SYNC) {
+    SYNC.onChange(renderSync);
+    addEventListener('storage', e => { if (e.key === SYNC_KEY || e.key === AG.demoPartner.LINK) renderSync(); });
+  }
+
+  /* ================= the agent =================
+     A turn starts with something the guest wrote or did. A brain proposes a tool; agent/permissions.js decides; the tool below runs
+     on top of the functions this page already had; the result goes back to the brain, which replies or picks another tool.
+     Everything the brain is shown comes from snapshot(), and everything the engine decides on comes from factsFor(): both are
+     built here from the hotel's data, never from what the guest typed. */
+  const fill = (s, o) => s.replace(/\{(\w+)\}/g, (m, k) => (o[k] == null ? '' : o[k]));
+  const session = { reqDone: false, waiting: false, offer: false };
+  const resetSession = () => { session.reqDone = false; session.waiting = false; session.offer = false; };
+  /* card numbers never stay in a message, a log or a model call; identity and mobile numbers are cut to their last four digits */
+  const redact = t => String(t).replace(/\b\d{13,19}\b|\b\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{1,7}\b/g, __('[رقم بطاقة محذوف]')).replace(/(^|\D)(?:[12]\d{5}|05\d{4})(\d{4})(?=\D|$)/g, '$1••••••$2');
+
+  function stageOf(b) {
+    if (!b) return 'identify';
+    const r = roomOf(b);
+    if (!session.reqDone && !b.paid) return 'requests';
+    if (!b.key && (!r || r.state !== 'ready')) return 'readiness';
+    if (!b.paid) return 'payment';
+    if (!b.key) return 'key';
+    return 'stay';
+  }
+  function snapshot() {                             // what a brain may see: no names, no identity or contact numbers
+    const b = cur, r = b && roomOf(b), alt = b && altFor(b), stage = stageOf(b);
+    return {
+      stage, waiting: session.waiting,
+      pending: session.offer ? 'move_offer' : stage === 'readiness' && !session.waiting ? 'room_choice' : null,
+      booking: b ? { room: b.room, category: r ? r.cat : '', cat: r ? r.cat : '', nights: b.nights, arrived: !!b.arrivedAt, paid: !!b.paid, key: b.key || null, late: !!b.late,
+        comp: b.comp || 0, refunded: !!b.refunded, roomState: r ? r.state : 'ready', alt: alt ? alt.no : null } : null,
+      perms: { reissue: !!S.perms.reissue, ticket: !!S.perms.ticket, move: !!S.perms.move, late: !!S.perms.late, limit: S.perms.limit }
+    };
+  }
+  const factsFor = b => ({                          // what the permission engine decides on
+    booking: b ? { room: b.room, arrived: !!b.arrivedAt, paid: !!b.paid, key: b.key || null, late: !!b.late, comp: b.comp || 0, refunded: !!b.refunded,
+      total: bill(b).total, hasPhone: !!b.phone, hasEmail: !!b.email, keys: [b.id, b.phone].filter(Boolean) } : null,
+    rooms: S.rooms.map(r => ({ no: r.no, cat: r.cat, state: r.state, taken: !!occupant(r.no) })),
+    perms: { reissue: !!S.perms.reissue, ticket: !!S.perms.ticket, move: !!S.perms.move, late: !!S.perms.late, limit: S.perms.limit }
+  });
+
+  /* ---------- the words for the trail ---------- */
+  const TOOL_LABEL = {
+    find_booking: __('البحث عن الحجز'), get_room_status: __('قراءة حالة الغرفة'), get_rates: __('قراءة الأسعار'), check_in: __('تسجيل الوصول'),
+    route_request: __('تحويل الطلب للقسم المختص'), issue_key: __('إصدار رمز الدخول'), reissue_key: __('إعادة إصدار رمز الدخول'), open_ticket: __('فتح بلاغ'),
+    move_room: __('النقل إلى غرفة من نفس الفئة'), late_checkout: __('تأخير المغادرة'), compensate: __('التعويض ضمن الحد'), request_staff_approval: __('طلب موافقة موظف'),
+    store_card_data: __('حفظ بيانات بطاقة'), open_room_for_other: __('فتح غرفة لغير صاحب الحجز'), change_price: __('تغيير السعر')
+  };
+  const INTENT_LABEL = {
+    identify: __('النزيل عرّف بنفسه'), no_requests: __('لا طلبات للإقامة'), take_alt: __('اختار الغرفة البديلة'), wait_room: __('اختار انتظار غرفته'),
+    room_ready: __('الغرفة صارت جاهزة'), key_choice: __('اختار طريقة استلام المفتاح'), next_step: __('الخطوة التالية في الوصول'), wait_maint: __('اختار انتظار الصيانة'),
+    card: __('في الرسالة بيانات بطاقة'), other_room: __('يطلب غرفة ليست له'), price: __('يطلب تغيير السعر'), give_key: __('يطلب المفتاح'), refund: __('يطلب استرجاع المبلغ'),
+    comp: __('يطلب تعويضاً'), move: __('يطلب تغيير الغرفة'), late: __('يطلب تأخير المغادرة'), code: __('رمز الدخول لا يعمل'), clean: __('الغرفة تحتاج تنظيفاً'),
+    maint: __('عطل في الغرفة'), bill: __('يسأل عن فاتورته'), rates: __('يسأل عن الأسعار'), status: __('يسأل عن جاهزية غرفته'), mine: __('يسأل عن حجزه'),
+    requests: __('طلبات للإقامة'), other: __('ملاحظة للاستقبال'), apology: __('اعتذار عن الإزعاج'), answer: __('سؤال عام يُجاب من بيانات الفندق'), fallback: __('بديل بعد قرار الموظف'), offer_move: __('عرض غرفة بديلة'),
+    paid: __('النزيل أتمّ الدفع'), choice: __('ردّ على عرض المساعد')
+  };
+  const WHY = {                                    // why the code said no
+    card_data: __('بيانات البطاقات ممنوعة دائماً'), other_room: __('فتح غرفة لغير صاحب الحجز ممنوع دائماً'), other_booking: __('حجز نزيل آخر: ممنوع دائماً'),
+    other_category: __('فئة أخرى بسعر آخر: ممنوع دائماً'), price: __('تغيير الأسعار ممنوع دائماً'), unknown_tool: __('أداة غير معروفة'), forbidden: __('ممنوع دائماً'),
+    bad_args: __('معطيات لا تطابق مخطط الأداة'), no_booking: __('لا يوجد حجز معرَّف'), not_paid: __('لم يتم الدفع بعد'), room_not_ready: __('الغرفة ليست جاهزة'),
+    has_key: __('المفتاح مُسلَّم من قبل'), no_key: __('لم يصدر مفتاح بعد'), not_arrived: __('لم يُسجَّل الوصول بعد'), already: __('نُفّذ من قبل'),
+    target_unavailable: __('لا غرفة بديلة جاهزة من نفس الفئة'), refunded: __('المبلغ مُسترجع'), no_contact: __('لا وسيلة تواصل على الحجز')
+  };
+  const verdictOf = e => {                         // [tag class, tag text, plain sentence]
+    if (e.verdict === 'deny') return e.tier === 'never' ? ['never', TIER.never, WHY[e.code] || WHY.forbidden] : ['no', TIER.no, WHY[e.code] || ''];
+    if (e.verdict === 'approve') {
+      if (e.waiting) return ['wait', TIER.wait, __('يتجاوز صلاحياتي: بانتظار موظف')];
+      return e.approved ? ['ok', TIER.ok, __('وافق الموظف')] : ['no', TIER.no, __('لم يوافق الموظف')];
+    }
+    return e.tier === 'auto' ? ['auto', TIER.auto, __('مسموح: ينفّذه بنفسه')] : e.tier === 'limit' ? ['limit', TIER.limit, __('مسموح: ضمن حد التعويض')] : ['limit', TIER.limit, __('مسموح: صلاحية فعّلها الفندق')];
+  };
+  const heardOf = input => (input.type === 'text' ? input.shown : INTENT_LABEL[{ identify: 'identify', no_requests: 'no_requests', room_ready: 'room_ready', paid: 'paid', key_choice: 'key_choice' }[input.name]] || INTENT_LABEL.choice);
+
+  /* ---------- the trail: on the guest screen as it happens, and in the store for the admin console ---------- */
+  let turnN = 0;
+  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), heard: heardOf(input), node: null, rows: {}, intent: null, src: 'stage' }; }
+  function trailNode(tr) {
+    if (tr.node || tr.src !== 'stage') return;
+    const box = el('div', 'm trail'), head = el('div', 'trail-head');
+    head.append(el('span', '', __('مسار الوكيل')), tr.brainTag = el('small', '', ''));
+    tr.under = el('p', 'trail-got'); tr.list = el('ol');
+    box.append(head, tr.under, tr.list); tr.node = box; push(box);
+  }
+  function trailAdd(tr, e) {
+    if (e.intent && !tr.intent) tr.intent = e.intent;
+    if (tr.src === 'stage') {
+      trailNode(tr);
+      tr.under.replaceChildren(el('b', '', __('فهمت: ')), INTENT_LABEL[tr.intent] || INTENT_LABEL.other);
+      tr.brainTag.textContent = e.brain === 'model' ? __('عقل النموذج') : __('عقل القواعد');
+      if (e.kind === 'limit') tr.list.append(el('li', 'stop', __('توقفت: بلغت الحد الأقصى للخطوات في الرسالة.')));
+      if (e.kind === 'tool') {
+        const v = verdictOf(e), li = tr.rows[e.n] || (tr.rows[e.n] = tr.list.appendChild(el('li')));
+        const top = el('div'); top.append(el('b', '', TOOL_LABEL[e.tool] || e.tool), el('span', 'tag ' + v[0], v[1]));
+        li.replaceChildren(top, el('small', '', v[2] + (e.result && e.result.note ? ' ← ' + e.result.note : '')));
+        toEnd();
+      }
+    }
+    if (e.waiting) return;                          // the store keeps the outcome, not the wait
+    const b = tr.who || cur, v = e.kind === 'tool' ? verdictOf(e) : null;
+    S.trail.unshift({
+      t: nowTime(), turn: tr.id, src: tr.src, room: b ? b.room : '', guest: b ? mask(b.id) : '', heard: short(tr.heard), intent: tr.intent || '', brain: e.brain || 'rules',
+      kind: e.kind, tool: e.tool || '', say: e.say || '', args: e.tool ? argsText(e.args) : '', verdict: e.verdict || '', tier: e.tier || '', code: e.code || '',
+      approved: e.approved == null ? null : !!e.approved, amount: e.amount == null ? null : Math.round(e.amount * 100) / 100, tag: v ? v[0] : '', result: (e.result && e.result.note) || ''
+    });
+    if (S.trail.length > 150) S.trail.length = 150;
+    save(); renderTrail();
+  }
+  const argsText = a => { try { return redact(JSON.stringify(a || {})).slice(0, 160); } catch (x) { return ''; } };
+  function renderTrail() {
+    const ul = $('#trail'); ul.textContent = '';
+    if (!S.trail.length) { ul.append(el('li', '', __('لا خطوات بعد. كل رسالة من نزيل تظهر هنا: ما فُهم، الأداة، قرار الصلاحية، والنتيجة.'))); return; }
+    S.trail.forEach(e => {
+      const li = el('li'), body = el('span'), line = el('small', 'trail-line');
+      if (e.kind === 'tool') body.append(el('b', '', TOOL_LABEL[e.tool] || e.tool), e.result ? ' ← ' + e.result : '');
+      else if (e.kind === 'limit') body.append(__('توقفت: بلغت الحد الأقصى للخطوات في الرسالة.'));
+      else body.append(__('ردّ على النزيل'));
+      line.append((e.room ? __('الغرفة ') + e.room + ' · ' : '') + __('فهمت: ') + (INTENT_LABEL[e.intent] || INTENT_LABEL.other)
+        + (e.kind === 'tool' && WHY[e.code] ? ' · ' + WHY[e.code] : '') + ' · ' + (e.brain === 'model' ? __('عقل النموذج') : __('عقل القواعد')));
+      body.append(line);
+      li.append(el('time', '', e.t), body);
+      if (e.tag) li.append(el('span', 'tag ' + e.tag, TIER[e.tag] || ''));
+      ul.append(li);
+    });
+  }
+  /* a memory for each booking: what that guest said and what was done, kept under their booking only */
+  function remember(b, tr, steps, said) {
+    if (!b) return;
+    const m = S.memory[b.id] || (S.memory[b.id] = []);
+    m.push({ t: nowTime(), heard: redact(tr.heard).slice(0, 200), said: redact(said || '').slice(0, 300), intent: tr.intent || '', did: steps.filter(s => s.tool).map(s => s.tool + ':' + (s.result && s.result.ok ? 'ok' : s.result && s.result.denied ? 'denied' : s.result && s.result.declined ? 'declined' : 'no')) });
+    if (m.length > 20) m.splice(0, m.length - 20);
+    save();
+  }
+  const historyOf = b => (b && S.memory[b.id] ? S.memory[b.id].slice(-8) : []);      // the last turns of this booking, and of no other
+
+  /* ---------- the tools: each one is the page's own function, reached only through the permission engine ---------- */
+  const done = (text, d) => { if (d.verdict === 'allow') log(text, d.tier === 'auto' ? 'auto' : 'limit'); };      // an approved call was already logged by the approval itself
   async function moveTo(b, alt, why, ok) {
     const old = b.room, oldRoom = roomOf(b);
     if (why === 'maint' && oldRoom) oldRoom.state = 'maint';
@@ -609,209 +783,379 @@
     setPanel(...codePanel(b)); await showRoom(b.room, ok);
     return old;
   }
-  async function solve(b, text, auto, ok, sc) {
-    push(el('div', 'm guest', text)); setPhase('fix'); setPanel(busyPanel(__('يراجع المساعد بيانات حجزك…'))); hint('');
-    const kind = auto ? kindByRules(text) : await classify(text);
-    if (!ok()) return;
-
-    if (kind === 'code') {
-      if (b.key !== 'code') {
-        log(__('إرسال موظف لتبديل بطاقة الجناح ') + b.room, 'staff');
-        await bot(__('مفتاحك بطاقة من الاستقبال. أبلغت الموظف ليبدّلها لك حالاً.'), ok); return;
+  const billLine = (b, t) => {
+    const adj = t.pct ? __(' بعد تعديل الطلب (') + PERIODS[periodKey()].label + __('، ') + (t.pct > 0 ? '+' : '') + t.pct + '%)' : '';
+    return __('سعر الليلة ') + t.rate + __(' ر.س') + adj + __('، والإجمالي ') + money(t.total) + __(' شاملاً ضريبة القيمة المضافة.');
+  };
+  const ratesLine = () => {
+    const pct = pricePct();
+    return __('أسعار الليلة (') + PERIODS[periodKey()].label + (pct ? __('، ') + (pct > 0 ? '+' : '') + pct + '%' : '') + '): '
+      + CATS.map(c => { const r = S.rooms.find(x => x.cat === c.key); return r ? c.key + ' ' + rateNow(r) + __(' ر.س') : ''; }).filter(Boolean).join(__('، ')) + '.';
+  };
+  const TOOLS = {
+    async find_booking(a, d, x, ok) {
+      if (!a.key) { const b = cur; if (!b) { await speak('need_id', null, ok); return { ok: false }; } await bot(__('حجزك: ') + bookingLine(b), ok); return { ok: true, note: __('الجناح ') + b.room }; }
+      const by = a.by || (/^05/.test(a.key) ? 'phone' : 'id'), M = MODES[by];
+      setPhase('link'); if (mode !== by) setMode(by); entry = a.key; renderId(); setPanel(busyPanel(__('جارٍ البحث عن الحجز…'))); hint('');
+      await sleep(900); if (!ok()) return { ok: false };
+      const b = S.bookings.find(v => M.find(v, a.key));
+      if (!b) {
+        setPhase('none'); shake(); panelEl.classList.remove('auto'); setPanel(keypadEl);
+        hint(__('لا يوجد حجز بهذا الرقم. تأكد منه أو جرّب ') + (by === 'id' ? __('رقم الجوال') : __('رقم الهوية')) + '.', 'bad');
+        await bot(__('لا يوجد حجز مرتبط بهذا الرقم.'), ok); return { ok: false, note: __('لا حجز بهذا الرقم') };
       }
-      if (!await bot(__('راجعت حجزك: الدفع مكتمل والجناح ') + b.room + __(' باسمك، فالخلل في الرمز نفسه.'), ok)) return;
-      const yes = await allowed('reissue', __('إعادة إصدار رمز الجناح ') + b.room, ok); if (yes === null) return;
-      if (yes) {
-        push(keyMessage(b, b.via, passcode()));
-        if (S.perms.reissue) log(__('إلغاء الرمز القديم وإصدار رمز جديد للجناح ') + b.room, 'auto');
-        await bot(__('ألغيت الرمز القديم وأرسلت لك رمزاً جديداً. وإن فضّلت، بطاقة من الاستقبال متاحة لك في أي وقت.'), ok);
-      } else {
-        b.key = 'card'; save(); renderRows(); log(__('تجهيز بطاقة بديلة للجناح ') + b.room + __(' عند الاستقبال'), 'staff');
-        await bot(__('لم يوافق الموظف على رمز جديد. جهّزت لك بطاقة عند الاستقبال.'), ok);
+      if (cur !== b) resetSession();
+      cur = b; { const r = roomOf(b); setScene(catIdx(r ? r.cat : '')); }
+      setPanel(...codePanel(b)); await showRoom(b.room, ok); if (!ok()) return { ok: false };
+      hint(__('رمز الحجز: ') + M.label + __(' وفي نهايته الغرفة ') + b.room + '.', 'ok');
+      if (b.arrivedAt) { if (!await bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false }; push(factsCard(b)); await sleep(900); }
+      return { ok: true, note: __('الجناح ') + b.room };
+    },
+    async check_in(a, d, x, ok) {
+      const b = cur;
+      if (!b.arrivedAt) {
+        b.arrivedAt = nowTime(); save(); renderRows();
+        log(__('تسجيل وصول ') + b.name + __(' ب', 'by') + MODES[mode].label + __(' · الجناح ') + b.room, 'auto');
+        partnerSend('check_in', b, { at: b.arrivedAt });
       }
-      return;
-    }
-
-    if (kind === 'maint') {
-      const yes = await allowed('ticket', __('فتح بلاغ صيانة للجناح ') + b.room, ok); if (yes === null) return;
-      if (yes) {
-        addTicket(b.room, 'maint', short(text));
-        if (S.perms.ticket) log(__('بلاغ صيانة عاجل للجناح ') + b.room + ': ' + short(text), 'auto');
-        if (!await bot(__('فتحت بلاغ صيانة عاجلاً للجناح ') + b.room + '.', ok)) return;
+      if (!await bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false };
+      push(factsCard(b)); await sleep(900);
+      return { ok: true, note: __('الوصول ') + b.arrivedAt };
+    },
+    async route_request(a, d, x, ok) {
+      const b = cur, items = a.items.map(i => ({ request: redact(i.request), dept: DEPTS[DEPT_IDS.indexOf(i.dept)] || DEPTS[2] }));
+      if (a.note) {
+        log(__('ملاحظة من نزيل الجناح ') + b.room + ': ' + short(items[0].request), 'staff');
+        partnerSend('request', b, { items: [{ request: items[0].request, dept: 'reception' }] });
+        await bot(__('سجّلت ملاحظتك وحوّلتها لموظف الاستقبال، وسيتواصل معك.'), ok);
+        return { ok: true, note: DEPTS[2] };
       }
-      const alt = altFor(b);
-      if (alt) {
-        const mc = choice(__('جناح بديل متاح'), __('الجناح ') + alt.no + __(' من نفس الفئة وجاهز.'), [{ v: 'move', label: __('انقلني إلى ') + alt.no, primary: true }, { v: 'stay', label: __('أنتظر الصيانة') }]);
-        setPanel(...mc.nodes);
-        if (!await bot(__('إن لم ترغب بالانتظار، أنقلك الآن إلى الجناح ') + alt.no + __(' من نفس الفئة وبنفس السعر.'), ok)) return;
-        const v = await decide(mc, auto, sc.move || 'move', ok); if (!ok()) return;
-        if (v === 'move') {
-          const go = await allowed('move', __('نقل ') + b.name + __(' من ') + b.room + __(' إلى ') + alt.no, ok); if (go === null) return;
-          if (go && !occupant(alt.no) && alt.state === 'ready') {
-            const old = await moveTo(b, alt, 'maint', ok); if (!ok()) return;
-            if (S.perms.move) log(__('نقل ') + b.name + __(' من ') + old + __(' إلى ') + b.room + __(' (نفس الفئة)'), 'auto');
-            if (b.key === 'code') { push(keyMessage(b, b.via, passcode())); if (!await bot(__('نقلتك إلى الجناح ') + b.room + __(' وأرسلت رمزه. الرمز القديم أُلغي.'), ok)) return; }
-            else { log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff'); if (!await bot(__('نقلتك إلى الجناح ') + b.room + __('. بطاقته جاهزة عند الاستقبال.'), ok)) return; }
-          } else if (!await bot(__('تعذّر النقل الآن. فريق الصيانة في الطريق إليك.'), ok)) return;
+      if (cur && stageOf(cur) !== 'stay') { setPanel(busyPanel(__('جارٍ تسجيل الطلبات…'))); hint(''); }
+      b.requests = (session.reqDone ? b.requests || [] : []).concat(items.map(i => i.request)).slice(-12); session.reqDone = true; save(); renderRows();
+      items.forEach(i => log(__('طلب ') + b.name + ': ' + i.request + ' ← ' + i.dept, 'auto'));
+      partnerSend('request', b, { items: a.items.map((i, k) => ({ request: items[k].request, dept: i.dept })) });
+      await bot(__('سجّلت طلباتك وحوّلتها للأقسام المختصة:'), ok, listNode(items));
+      return { ok: true, note: items.map(i => i.dept).filter((v, i, l) => l.indexOf(v) === i).join(__('، ')) };
+    },
+    async get_room_status(a, d, x, ok) {
+      const b = cur, r = roomOf(b), alt = altFor(b), state = r ? r.state : 'ready';
+      const note = STATE[state] + (state !== 'ready' && alt ? __(' · بديل جاهز: ') + alt.no : '');
+      if (state === 'ready') { if (x.first) await bot(__('جناحك ') + b.room + __(' جاهز.'), ok); return { ok: true, note }; }
+      const why = state === 'maint' ? __('تحت الصيانة', 'why') : __('قيد التجهيز', 'why');
+      if (b.key) await bot(fill(__('جناحك {room} الآن {why}.'), { room: b.room, why }), ok);
+      else if (session.waiting) await bot(fill(__('جناحك {room} ما زال {why}. سأبلغك فور جاهزيته.'), { room: b.room, why }), ok);
+      else await bot(__('جناحك ') + b.room + __(' محجوز لك لكنه ') + why + __('، لذلك لا أصدر مفتاحه الآن.') + (alt ? __(' عندي جناح جاهز من نفس الفئة وبنفس السعر: ') + alt.no + '.' : ''), ok);
+      return { ok: true, note };
+    },
+    async get_rates(a, d, x, ok) {
+      const b = cur;
+      if (a.scope === 'bill' && b) {
+        const t = bill(b);
+        if (b.paid) await bot(__('رسوم إقامتك مدفوعة مسبقاً.') + ' ' + __('الإجمالي') + ' ' + money(t.total) + '.', ok);
+        else await bot((x.first ? '' : __('جناحك جاهز. ')) + billLine(b, t), ok);
+        return { ok: true, note: __('الإجمالي') + ' ' + money(t.total) };
+      }
+      await bot(ratesLine(), ok);
+      return { ok: true, note: PERIODS[periodKey()].label };
+    },
+    async issue_key(a, d, x, ok) {
+      const b = cur;
+      if (a.via === 'card') {
+        b.key = 'card'; log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff');
+        save(); renderRows(); setPhase('open');
+        await bot(__('بطاقتك جاهزة عند موظف الاستقبال، اذكر له رقم هويتك أو جوالك فقط. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + '.', ok);
+        return { ok: true, note: __('بطاقة من الاستقبال') };
+      }
+      b.key = 'code'; b.via = a.via; push(keyMessage(b, a.via, passcode()));
+      log(__('إصدار رمز دخول للجناح ') + b.room + __(' وإرساله ') + (a.via === 'sms' ? __('برسالة SMS') : __('بالبريد')), 'auto');
+      save(); renderRows(); setPhase('open');
+      await bot(__('أرسلت رمز الدخول ') + (a.via === 'sms' ? __('برسالة SMS') : __('إلى بريدك')) + __('. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + __('. إقامة سعيدة.'), ok);
+      return { ok: true, note: a.via === 'sms' ? __('برسالة SMS') : __('بالبريد') };
+    },
+    async reissue_key(a, d, x, ok) {
+      const b = cur;
+      if (a.via === 'card') {
+        if (b.key === 'card') {
+          log(__('إرسال موظف لتبديل بطاقة الجناح ') + b.room, 'staff');
+          await bot(__('مفتاحك بطاقة من الاستقبال. أبلغت الموظف ليبدّلها لك حالاً.'), ok);
+        } else {
+          b.key = 'card'; save(); renderRows(); log(__('تجهيز بطاقة بديلة للجناح ') + b.room + __(' عند الاستقبال'), 'staff');
+          await bot(__('لم يوافق الموظف على رمز جديد. جهّزت لك بطاقة عند الاستقبال.'), ok);
         }
+        return { ok: true, note: __('بطاقة من الاستقبال') };
       }
-      await compensate(b, ok); return;
+      if (d.verdict === 'allow' && !await bot(__('راجعت حجزك: الدفع مكتمل والجناح ') + b.room + __(' باسمك، فالخلل في الرمز نفسه.'), ok)) return { ok: false };
+      push(keyMessage(b, b.via, passcode()));
+      done(__('إلغاء الرمز القديم وإصدار رمز جديد للجناح ') + b.room, d);
+      await bot(__('ألغيت الرمز القديم وأرسلت لك رمزاً جديداً. وإن فضّلت، بطاقة من الاستقبال متاحة لك في أي وقت.'), ok);
+      return { ok: true, note: __('رمز جديد، والقديم أُلغي') };
+    },
+    async open_ticket(a, d, x, ok) {
+      const b = cur, text = a.kind === 'maint' ? short(redact(a.text || '')) : __('تنظيف عاجل');
+      const n = addTicket(b.room, a.kind, text);
+      done(a.kind === 'maint' ? __('بلاغ صيانة عاجل للجناح ') + b.room + (text ? ': ' + text : '') : __('مهمة تنظيف عاجلة للجناح ') + b.room, d);
+      partnerSend('ticket', b, { n, kind: a.kind, text });
+      await bot(a.kind === 'maint' ? __('فتحت بلاغ صيانة عاجلاً للجناح ') + b.room + '.' : __('أرسلت فريق التدبير الفندقي إلى جناحك الآن.'), ok);
+      return { ok: true, note: __('بلاغ #') + n };
+    },
+    async move_room(a, d, x, ok) {
+      const b = cur, alt = S.rooms.find(r => r.no === a.to), had = stageOf(b);
+      if (!alt || occupant(alt.no) || alt.state !== 'ready') return { ok: false, note: WHY.target_unavailable };
+      const old = await moveTo(b, alt, a.why === 'maint' ? 'maint' : 'prep', ok); if (!ok()) return { ok: false };
+      session.waiting = false; session.offer = false;
+      done(__('نقل ') + b.name + __(' من ') + old + __(' إلى ') + b.room + __(' (نفس الفئة)'), d);
+      partnerSend('room_change', b, { from: old, to: b.room, fromState: a.why === 'maint' ? 'maint' : null });
+      if (b.key === 'code') { push(keyMessage(b, b.via, passcode())); await bot(__('نقلتك إلى الجناح ') + b.room + __(' وأرسلت رمزه. الرمز القديم أُلغي.'), ok); }
+      else if (b.key === 'card') { log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff'); await bot(__('نقلتك إلى الجناح ') + b.room + __('. بطاقته جاهزة عند الاستقبال.'), ok); }
+      else { if (had === 'readiness') hint(__('رمز الحجز تحدّث: الغرفة ') + b.room + '.', 'ok'); await bot(__('نقلتك إلى الجناح ') + b.room + __('. هو جاهز الآن.'), ok); }
+      return { ok: true, note: old + ' ← ' + b.room };
+    },
+    async late_checkout(a, d, x, ok) {
+      const b = cur;
+      b.late = true; save(); renderRows();
+      done(__('تأخير مغادرة ') + b.name + __(' ساعة إلى 1:00 ظهراً'), d);
+      await bot(__('مدّدت مغادرتك ساعة إلى 1:00 ظهراً.'), ok);
+      return { ok: true, note: __('المغادرة 1:00 ظهراً') };
+    },
+    async compensate(a, d, x, ok) {
+      const b = cur, amt = d.amount;
+      b.comp = Math.max(b.comp || 0, amt); save(); renderRows();
+      done(__('تعويض النزيل ') + b.name + __(' بمبلغ ') + money(amt) + __(' (الحد ') + S.perms.limit + __(' ر.س)'), d);
+      await bot(__('واعتذاراً عن الإزعاج عوّضتك بمبلغ ') + money(amt) + __(' يُعاد إلى وسيلة الدفع نفسها.'), ok);
+      return { ok: true, note: money(amt) };
+    },
+    async request_staff_approval(a, d, x, ok) {          // reached only after a staff member said yes
+      const b = cur;
+      b.refunded = true; save(); renderRows();
+      await bot(__('وافق الموظف. يُعاد المبلغ كاملاً إلى وسيلة الدفع نفسها.'), ok);
+      return { ok: true, note: __('استرجاع كامل') + ' ' + money(d.amount) };
     }
-
-    if (kind === 'clean') {
-      const yes = await allowed('ticket', __('مهمة تنظيف عاجلة للجناح ') + b.room, ok); if (yes === null) return;
-      if (yes) addTicket(b.room, 'clean', __('تنظيف عاجل'));
-      if (yes && S.perms.ticket) log(__('مهمة تنظيف عاجلة للجناح ') + b.room, 'auto');
-      if (S.perms.late && !b.late) {
-        b.late = true; save(); renderRows(); log(__('تأخير مغادرة ') + b.name + __(' ساعة إلى 1:00 ظهراً'), 'auto');
-        await bot(__('أرسلت فريق التدبير الفندقي الآن، ومدّدت مغادرتك ساعة إلى 1:00 ظهراً اعتذاراً.'), ok);
-      } else await bot(yes ? __('أرسلت فريق التدبير الفندقي إلى جناحك الآن.') : __('أبلغت الموظف وسيتابع معك.'), ok);
-      return;
+  };
+  /* what staff are asked to decide, in the hotel's words and with the hotel's numbers */
+  function approvalText(call, d, b) {
+    const a = d.args;
+    switch (call.tool) {
+      case 'reissue_key': return __('إعادة إصدار رمز الجناح ') + b.room;
+      case 'open_ticket': return a.kind === 'maint' ? __('فتح بلاغ صيانة للجناح ') + b.room : __('مهمة تنظيف عاجلة للجناح ') + b.room;
+      case 'move_room': return __('نقل ') + b.name + __(' من ') + b.room + __(' إلى ') + a.to;
+      case 'late_checkout': return __('تأخير مغادرة ') + b.name + __(' ساعة إلى 1:00 ظهراً');
+      case 'compensate': return fill(__('تعويض {name} بمبلغ {amount} (يتجاوز ما يُمنح تلقائياً، الحد {limit} ر.س)'), { name: b.name, amount: money(d.amount), limit: S.perms.limit });
     }
-
-    if (kind === 'refund') {
-      setPanel(busyPanel(__('بانتظار قرار الموظف…'))); hint(__('الطلب الآن عند موظف الاستقبال في لوحة الإدارة.'), 'warn');
-      if (!await bot(__('الاسترجاع الكامل خارج صلاحياتي دائماً. حوّلت طلبك لموظف الاستقبال مع ملخص حالتك.'), ok)) return;
-      const yes = await approval(__('استرجاع كامل لحجز ') + b.name + ' · ' + money(bill(b).total));
-      hint(''); if (!ok()) return;
-      if (yes) { b.refunded = true; save(); renderRows(); await bot(__('وافق الموظف. يُعاد المبلغ كاملاً إلى وسيلة الدفع نفسها.'), ok); }
-      else { if (!await bot(__('لم يوافق الموظف على الاسترجاع الكامل.'), ok)) return; await compensate(b, ok); }
-      return;
+    return __('استرجاع كامل لحجز ') + b.name + ' · ' + money(d.amount);
+  }
+  async function askStaff(call, d, ok) {
+    const refund = call.tool === 'request_staff_approval';
+    setPanel(busyPanel(refund ? __('بانتظار قرار الموظف…') : __('بانتظار موافقة الموظف…'))); hint(__('الطلب الآن عند موظف الاستقبال في لوحة الإدارة.'), 'warn');
+    if (!await bot(refund ? __('الاسترجاع الكامل خارج صلاحياتي دائماً. حوّلت طلبك لموظف الاستقبال مع ملخص حالتك.') : __('هذا الإجراء خارج صلاحياتي الحالية. أرسلته للموظف مع ملخص الحالة.'), ok)) return false;
+    const yes = await approval(approvalText(call, d, cur));
+    hint(''); return ok() ? yes : false;
+  }
+  async function saidNo(call, d, ok) {             // a staff member declined
+    const t = call.tool;
+    if (t === 'reissue_key' || (t === 'move_room' && stageOf(cur) === 'readiness')) return;      // the brain's next step says it
+    await bot(t === 'request_staff_approval' ? __('لم يوافق الموظف على الاسترجاع الكامل.') : t === 'open_ticket' ? __('أبلغت الموظف وسيتابع معك.')
+      : t === 'move_room' ? __('تعذّر النقل الآن. فريق الصيانة في الطريق إليك.') : __('لم يوافق الموظف على هذا الطلب.'), ok);
+  }
+  async function refuse(call, d, ok) {             // the code said no: say so plainly, and put the forbidden ones on the hotel's log
+    const c = d.code, t = call.tool, money0 = t === 'compensate' || t === 'request_staff_approval';
+    if (d.tier === 'never') log(__('رُفض في الكود: ') + (TOOL_LABEL[t] || WHY.unknown_tool) + (cur ? __(' · الجناح ') + cur.room : ''), 'never');
+    const text = c === 'card_data' ? __('لا أستقبل بيانات البطاقات ولا أحفظها أبداً، وحذفت الرقم من رسالتك. الدفع يتم من لوحة الدفع فقط.')
+      : c === 'other_room' || c === 'other_booking' ? __('لا أفتح غرفة ولا أصدر مفتاحها ولا أعرض حجزها إلا لصاحب الحجز نفسه. هذا ممنوع دائماً.')
+      : c === 'other_category' ? __('النقل يكون لغرفة من نفس الفئة وبنفس السعر فقط.')
+      : c === 'price' ? __('لا أغيّر الأسعار ولا المبالغ، ولا أتجاوز الدفع. السعر يحسبه نظام الفندق.')
+      : c === 'no_booking' ? __('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.')
+      : c === 'not_paid' ? (money0 ? __('لم يُدفع مبلغ بعد، فلا يوجد ما أعيده.') : __('لا أصدر المفتاح قبل إتمام الدفع.'))
+      : c === 'room_not_ready' ? __('لا أصدر المفتاح قبل جاهزية الجناح.')
+      : c === 'has_key' ? __('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.')
+      : c === 'no_key' ? __('لم يصدر مفتاحك بعد. نكمل الوصول أولاً.')
+      : c === 'not_arrived' ? __('نسجّل وصولك أولاً، ثم أصدر المفتاح.')
+      : c === 'already' ? __('نُفّذ هذا لك من قبل.')
+      : c === 'target_unavailable' ? __('لا يوجد جناح بديل جاهز من نفس الفئة الآن.')
+      : c === 'refunded' ? __('استُرجع مبلغ هذا الحجز، فلا أنفّذ عليه إجراءات جديدة.')
+      : c === 'no_contact' ? __('لا يوجد على الحجز رقم جوال أو بريد لهذه الطريقة. بطاقة من الاستقبال متاحة لك.')
+      : __('هذا خارج ما أستطيع تنفيذه. حوّل طلبك لموظف الاستقبال إن أردت.');
+    await bot(text, ok);
+  }
+  async function speak(code, state, ok, text) {
+    const b = cur;
+    switch (code) {
+      case 'free': return text ? bot(redact(text), ok) : true;      // a model's own words: only ever an answer, never an action
+      case 'ask_requests': return bot(__('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok);
+      case 'no_requests': session.reqDone = true; return bot(__('لا توجد طلبات الآن. يمكنك طلب أي شيء لاحقاً.'), ok);
+      case 'will_notify': session.waiting = true; return bot(__('سأبلغك فور جاهزيته، ولن تحتاج لمراجعة الاستقبال.'), ok);
+      case 'move_failed': session.waiting = true; return bot(__('تعذّر النقل. سأنتظر معك جاهزية جناحك.'), ok);
+      case 'room_ready': session.waiting = false; return bot(__('جناحك ') + b.room + __(' صار جاهزاً.'), ok);
+      case 'ask_key': return bot(__('كيف تفضّل استلام مفتاحك؟ رمز دخول إلكتروني، أو بطاقة عادية من الاستقبال.'), ok);
+      case 'welcome_back': return bot(__('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.'), ok);
+      case 'offer_move': { const alt = altFor(b); if (!alt) return true; session.offer = true; return bot(__('إن لم ترغب بالانتظار، أنقلك الآن إلى الجناح ') + alt.no + __(' من نفس الفئة وبنفس السعر.'), ok); }
+      case 'wait_maint': return bot(__('تمام. فريق الصيانة في الطريق إليك.'), ok);
+      case 'no_alt': return bot(__('لا يوجد جناح بديل جاهز من نفس الفئة الآن.'), ok);
+      case 'need_id': return bot(__('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.'), ok);
     }
-
-    log(__('ملاحظة من نزيل الجناح ') + b.room + ': ' + short(text), 'staff');
-    await bot(__('سجّلت ملاحظتك وحوّلتها لموظف الاستقبال، وسيتواصل معك.'), ok);
+    return true;
   }
 
-  /* ---------- the guest journey ---------- */
+  /* ---------- one turn of the agent on the guest screen ---------- */
+  const askForm = $('#askForm'), askInput = $('#askInput');
+  let askResolve = null, turning = false;
+  const asking = on => { askInput.disabled = !on; askForm.classList.toggle('off', !on); };
+  /* whatever the screen is waiting for (a button, a room becoming ready), a typed message can arrive first */
+  const race = p => new Promise(res => { askResolve = t => res(t === REFRESH ? { refresh: true } : { ask: t }); asking(true); Promise.resolve(p).then(v => res({ v })); });
+  async function agentTurn(input, ok, auto) {
+    turning = true; askResolve = null; asking(false);
+    if (input.type === 'text') {
+      /* the rules brain matches the guest's own words in this browser; what is shown, logged, remembered or sent to a model is the redacted copy */
+      input.text = String(input.text).slice(0, 300); input.shown = redact(input.text);
+      push(el('div', 'm guest', input.shown));
+      if (cur) { if (stageOf(cur) === 'stay') setPhase('fix'); setPanel(busyPanel(__('يراجع المساعد بيانات حجزك…'))); hint(''); }
+    }
+    const tr = trailStart(input), who0 = cur;
+    saying = [];
+    let offer0 = session.offer;                     // an offer on the table is answered by this turn, whatever the guest says
+    let out = { steps: [] };
+    try {
+      out = await AG.agent.turn({
+        input, lang, brain: !auto && modelOn() && input.type === 'text' ? modelBrain : RULES, fallback: RULES,
+        snapshot, facts: () => factsFor(cur), history: () => historyOf(cur), alive: ok,
+        run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok),
+        approve: (call, d) => askStaff(call, d, ok),
+        declined: (call, d) => saidNo(call, d, ok),
+        refuse: (call, d) => refuse(call, d, ok),
+        speak: (code, state, text) => speak(code, state, ok, text),
+        record: e => { if (offer0) { offer0 = false; session.offer = false; } trailAdd(tr, e); },
+        onFallback: () => modelDown()
+      });
+    } finally { turning = false; }
+    const said = saying.join(' '); saying = null;
+    if (ok()) remember(cur || who0, tr, out.steps, said);
+    return out;
+  }
+
+  /* ---------- the guest journey: the screen shows what the booking needs next, and every answer goes through the agent ---------- */
   function clearStage() {
-    entry = ''; roomShown = ''; cur = null; setPhase('idle'); renderId();
+    entry = ''; roomShown = ''; cur = null; resetSession(); askResolve = null; turning = false; asking(true); setPhase('idle'); renderId();
     panelEl.classList.remove('auto'); setPanel(keypadEl);
     feed.textContent = ''; push(el('div', 'm bot', __('مرحباً بك. أدخل رقم هويتك أو رقم جوالك لأبدأ تسجيل وصولك.')));
     hint(MODES[mode].hint);
   }
-  async function flow(auto, ok, sc) {
+  async function typeInto(ta, text, ok, ms) { for (const ch of text) { ta.value += ch; await sleep(ms); if (!ok()) return false; } return true; }
+  async function serve(auto, ok, sc) {
     sc = sc || {};
+    let script = sc.problem;
+    for (;;) {
+      const b = cur; if (!b || !ok()) return;
+      const stage = stageOf(b);
+      let input = null, r;
+      presented = stage;
+
+      if (stage === 'requests') {                    // the guest writes what they need
+        setPhase('req'); const rq = reqPanel(); setPanel(...rq.nodes); hint(__('اكتب طلباتك أو اختر منها.'));
+        if (auto) { if (!await typeInto(rq.ta, sc.req || '', ok, 32)) return; await sleep(600); r = { v: rq.ta.value }; }
+        else r = await race(rq.done);
+        if (!ok()) return;
+        if (r.refresh) continue;
+        const text = r.ask != null ? r.ask : r.v;
+        input = text ? { type: 'text', text } : { type: 'event', name: 'no_requests' };
+
+      } else if (stage === 'readiness') {            // no key before the suite is ready
+        const room = roomOf(b), alt = altFor(b), why = room && room.state === 'maint' ? __('تحت الصيانة', 'why') : __('قيد التجهيز', 'why');
+        setPhase('wait');
+        if (session.waiting) {
+          setPanel(busyPanel(__('بانتظار جاهزية الجناح ') + b.room + '…'));
+          if (auto) { await sleep(2400); if (!ok()) return; setRoomState(b.room, 'ready'); log(__('الجناح ') + b.room + __(' صار: جاهز'), 'staff'); r = {}; }
+          else { hint(__('الغرفة ') + b.room + __(' تُجهَّز الآن. تتحدّث هذه الشاشة فور تغيير حالتها من لوحة الإدارة.'), 'warn'); r = await race(waitReady(b.room)); }
+          if (!ok()) return;
+          if (r.refresh) continue;
+          input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'room_ready' };
+        } else {
+          const wc = choice(__('الجناح ') + b.room + ' ' + why, __('لا يصدر مفتاحه قبل جاهزيته.'),
+            [{ v: 'wait', label: __('أنتظر جاهزيته') }].concat(alt ? [{ v: 'alt', label: __('بديل جاهز: ') + alt.no, primary: true }] : []));
+          setPanel(...wc.nodes); hint(__('الجناح ') + b.room + ' ' + why + '.', 'warn');
+          r = auto ? { v: await decide(wc, true, sc.notReady || 'wait', ok) } : await race(wc.picked);
+          if (!ok()) return;
+          if (r.refresh) continue;
+          input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'room_choice', v: r.v };
+        }
+
+      } else if (stage === 'payment') {              // payment is the guest's own act on the panel (simulated); the agent never takes it
+        session.waiting = false;
+        setPhase('pay'); const pp = payPanel(b); setPanel(...pp.nodes); hint(__('اختر طريقة الدفع.'));
+        if (auto) { await sleep(900); if (!ok()) return; pp.btns[0].classList.add('sel'); await sleep(600); r = { v: pp.btns[0] }; }
+        else r = await race(pp.picked);
+        if (!ok()) return;
+        if (r.refresh) continue;
+        if (r.ask != null) input = { type: 'text', text: r.ask };
+        else {
+          const method = r.v.textContent; askResolve = null; asking(false);
+          setPanel(busyPanel(__('جارٍ تنفيذ الدفع عبر ') + method + '…')); hint('');
+          await sleep(1400); if (!ok()) return;
+          b.paid = true; b.pct = pp.t.pct; b.rateBase = pp.t.base; save(); renderRows(); log(__('تحصيل ') + money(pp.total) + __(' من ') + b.name + __(' عبر ') + method, 'auto');
+          if (!await bot(__('تم الدفع عبر ') + method + __('. شكراً لك.'), ok)) return;
+          input = { type: 'event', name: 'paid' };
+        }
+
+      } else if (stage === 'key') {                  // an e-code is optional, a card from reception is always available
+        setPhase('send');
+        const kc = choice(__('استلام المفتاح'), __('الرمز الإلكتروني اختياري.'),
+          [{ v: 'sms', label: __('رمز برسالة SMS'), off: !b.phone }, { v: 'email', label: __('رمز بالبريد'), off: !b.email }, { v: 'card', label: __('بطاقة من الاستقبال') }]);
+        setPanel(...kc.nodes); hint(__('اختر طريقة استلام المفتاح.'));
+        r = auto ? { v: await decide(kc, true, sc.key || 'sms', ok) } : await race(kc.picked);
+        if (!ok()) return;
+        if (r.refresh) continue;
+        input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'key_choice', via: r.v };
+
+      } else {                                       // after the key: whatever the guest needs, inside the agent's permissions
+        setPhase('open');
+        const alt = session.offer && altFor(b);
+        if (alt) {
+          const mc = choice(__('جناح بديل متاح'), __('الجناح ') + alt.no + __(' من نفس الفئة وجاهز.'), [{ v: 'move', label: __('انقلني إلى ') + alt.no, primary: true }, { v: 'stay', label: __('أنتظر الصيانة') }]);
+          setPanel(...mc.nodes);
+          r = auto ? { v: await decide(mc, true, sc.move || 'move', ok) } : await race(mc.picked);
+          if (!ok()) return;
+          if (r.refresh) continue;
+          input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'move_choice', v: r.v };
+        } else {
+          session.offer = false;
+          const pp = problemPanel(b); setPanel(...pp.nodes); hint(__('اكتمل تسجيل الوصول. المساعد متاح لأي مشكلة.'), 'ok');
+          if (auto) {
+            if (!script) return;
+            await sleep(1900); if (!ok()) return;
+            if (!await typeInto(pp.ta, script, ok, 34)) return;
+            await sleep(550); if (!ok()) return;
+            r = { v: script }; script = null;
+          } else r = await race(pp.done);
+          if (!ok()) return;
+          if (r.refresh) continue;
+          const text = r.ask != null ? r.ask : r.v;
+          if (!text) continue;
+          input = { type: 'text', text };
+        }
+      }
+      await agentTurn(input, ok, auto); if (!ok()) return;
+    }
+  }
+  async function journey(auto, ok, sc) {
     const M = MODES[mode], key = entry;
     if (!M.re.test(key)) { shake(); hint(key.length < 10 ? __('الرقم ناقص. ') + M.label + __(' 10 أرقام.') : M.bad, 'bad'); return; }
     panelEl.classList.toggle('auto', auto);
-
-    // 1 — ID or mobile number -> booking; the stage turns to the guest's suite and the room number joins the number they typed
-    setPhase('link'); renderId(); setPanel(busyPanel(__('جارٍ البحث عن الحجز…'))); hint('');
-    await sleep(900); if (!ok()) return;
-    const b = S.bookings.find(x => M.find(x, key));
-    if (!b) {
-      setPhase('none'); shake(); panelEl.classList.remove('auto'); setPanel(keypadEl);
-      hint(__('لا يوجد حجز بهذا الرقم. تأكد منه أو جرّب ') + (mode === 'id' ? __('رقم الجوال') : __('رقم الهوية')) + '.', 'bad');
-      await bot(__('لا يوجد حجز مرتبط بهذا الرقم.'), ok); return;
-    }
-    cur = b; { const r = roomOf(b); setScene(catIdx(r ? r.cat : '')); }
-    setPanel(...codePanel(b)); await showRoom(b.room, ok); if (!ok()) return;
-    if (!b.arrivedAt) { b.arrivedAt = nowTime(); save(); renderRows(); log(__('تسجيل وصول ') + b.name + __(' ب', 'by') + M.label + __(' · الجناح ') + b.room, 'auto'); }
-    hint(__('رمز الحجز: ') + M.label + __(' وفي نهايته الغرفة ') + b.room + '.', 'ok');
-    if (!await bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return;
-    push(factsCard(b)); await sleep(900); if (!ok()) return;
-
-    // 2 — the guest writes what they need
-    setPhase('req'); const rq = reqPanel(); setPanel(...rq.nodes); hint(__('اكتب طلباتك أو اختر منها.'));
-    if (!await bot(__('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok)) return;
-    let text;
-    if (auto) { for (const ch of (sc.req || '')) { rq.ta.value += ch; await sleep(32); if (!ok()) return; } await sleep(600); text = rq.ta.value; }
-    else text = await rq.done;
+    await agentTurn({ type: 'event', name: 'identify', key, by: mode }, ok, auto);
     if (!ok()) return;
-    if (text) {
-      push(el('div', 'm guest', text)); setPanel(busyPanel(__('جارٍ تسجيل الطلبات…'))); hint('');
-      const res = auto ? reqByRules(text) : await understand(text);
-      if (!ok()) return;
-      b.requests = res.items.map(i => i.request); save(); renderRows();
-      res.items.forEach(i => log(__('طلب ') + b.name + ': ' + i.request + ' ← ' + i.dept, 'auto'));
-      if (!await bot(res.reply, ok, listNode(res.items))) return;
-    } else if (!await bot(__('لا توجد طلبات الآن. يمكنك طلب أي شيء لاحقاً.'), ok)) return;
-
-    // 3 — readiness gate: no key before the suite is ready
-    setPhase('gate');
-    const room = roomOf(b);
-    if (room && room.state !== 'ready') {
-      setPhase('wait');
-      const alt = altFor(b), why = room.state === 'maint' ? __('تحت الصيانة', 'why') : __('قيد التجهيز', 'why');
-      const wc = choice(__('الجناح ') + b.room + ' ' + why, __('لا يصدر مفتاحه قبل جاهزيته.'),
-        [{ v: 'wait', label: __('أنتظر جاهزيته') }].concat(alt ? [{ v: 'alt', label: __('بديل جاهز: ') + alt.no, primary: true }] : []));
-      setPanel(...wc.nodes); hint(__('الجناح ') + b.room + ' ' + why + '.', 'warn');
-      if (!await bot(__('جناحك ') + b.room + __(' محجوز لك لكنه ') + why + __('، لذلك لا أصدر مفتاحه الآن.') + (alt ? __(' عندي جناح جاهز من نفس الفئة وبنفس السعر: ') + alt.no + '.' : ''), ok)) return;
-      let v = await decide(wc, auto, sc.notReady || 'wait', ok); if (!ok()) return;
-      if (v === 'alt') {
-        const go = await allowed('move', __('نقل ') + b.name + __(' من ') + b.room + __(' إلى ') + alt.no, ok); if (go === null) return;
-        if (go && !occupant(alt.no) && alt.state === 'ready') {
-          const old = await moveTo(b, alt, 'prep', ok); if (!ok()) return;
-          if (S.perms.move) log(__('نقل ') + b.name + __(' من ') + old + __(' إلى ') + b.room + __(' (نفس الفئة)'), 'auto');
-          hint(__('رمز الحجز تحدّث: الغرفة ') + b.room + '.', 'ok');
-          if (!await bot(__('نقلتك إلى الجناح ') + b.room + __('. هو جاهز الآن.'), ok)) return;
-        } else { if (!await bot(__('تعذّر النقل. سأنتظر معك جاهزية جناحك.'), ok)) return; v = 'wait'; }
-      }
-      if (v === 'wait') {
-        setPanel(busyPanel(__('بانتظار جاهزية الجناح ') + b.room + '…'));
-        if (!await bot(__('سأبلغك فور جاهزيته، ولن تحتاج لمراجعة الاستقبال.'), ok)) return;
-        if (auto) { await sleep(2400); if (!ok()) return; setRoomState(b.room, 'ready'); log(__('الجناح ') + b.room + __(' صار: جاهز'), 'staff'); }
-        else if (roomOf(b).state !== 'ready') { hint(__('الغرفة ') + b.room + __(' تُجهَّز الآن. تتحدّث هذه الشاشة فور تغيير حالتها من لوحة الإدارة.'), 'warn'); await waitReady(b.room); }
-        if (!ok()) return;
-        if (!await bot(__('جناحك ') + b.room + __(' صار جاهزاً.'), ok)) return;
-      }
-    }
-
-    // 4 — payment (simulated)
-    if (!b.paid) {
-      setPhase('pay'); const pp = payPanel(b); setPanel(...pp.nodes); hint(__('اختر طريقة الدفع.'));
-      const adj = pp.t.pct ? __(' بعد تعديل الطلب (') + PERIODS[periodKey()].label + __('، ') + (pp.t.pct > 0 ? '+' : '') + pp.t.pct + '%)' : '';
-      if (!await bot(__('جناحك جاهز. سعر الليلة ') + pp.t.rate + __(' ر.س') + adj + __('، والإجمالي ') + money(pp.total) + __(' شاملاً ضريبة القيمة المضافة.'), ok)) return;
-      let chosen;
-      if (auto) { await sleep(900); if (!ok()) return; pp.btns[0].classList.add('sel'); await sleep(600); chosen = pp.btns[0]; }
-      else chosen = await pp.picked;
-      if (!ok()) return;
-      const method = chosen.textContent;
-      setPanel(busyPanel(__('جارٍ تنفيذ الدفع عبر ') + method + '…')); hint('');
-      await sleep(1400); if (!ok()) return;
-      b.paid = true; b.pct = pp.t.pct; save(); renderRows(); log(__('تحصيل ') + money(pp.total) + __(' من ') + b.name + __(' عبر ') + method, 'auto');
-      if (!await bot(__('تم الدفع عبر ') + method + __('. شكراً لك.'), ok)) return;
-    } else if (!await bot(__('رسوم إقامتك مدفوعة مسبقاً.'), ok)) return;
-
-    // 5 — the key: an e-code is optional, a card from reception is always available
-    if (!b.key) {
-      setPhase('send');
-      const kc = choice(__('استلام المفتاح'), __('الرمز الإلكتروني اختياري.'),
-        [{ v: 'sms', label: __('رمز برسالة SMS'), off: !b.phone }, { v: 'email', label: __('رمز بالبريد'), off: !b.email }, { v: 'card', label: __('بطاقة من الاستقبال') }]);
-      setPanel(...kc.nodes); hint(__('اختر طريقة استلام المفتاح.'));
-      if (!await bot(__('كيف تفضّل استلام مفتاحك؟ رمز دخول إلكتروني، أو بطاقة عادية من الاستقبال.'), ok)) return;
-      const kv = await decide(kc, auto, sc.key || 'sms', ok); if (!ok()) return;
-      if (kv === 'card') {
-        b.key = 'card'; log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff');
-        save(); renderRows(); setPhase('open');
-        if (!await bot(__('بطاقتك جاهزة عند موظف الاستقبال، اذكر له رقم هويتك أو جوالك فقط. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + '.', ok)) return;
-      } else {
-        b.key = 'code'; b.via = kv; push(keyMessage(b, kv, passcode()));
-        log(__('إصدار رمز دخول للجناح ') + b.room + __(' وإرساله ') + (kv === 'sms' ? __('برسالة SMS') : __('بالبريد')), 'auto');
-        save(); renderRows(); setPhase('open');
-        if (!await bot(__('أرسلت رمز الدخول ') + (kv === 'sms' ? __('برسالة SMS') : __('إلى بريدك')) + __('. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + __('. إقامة سعيدة.'), ok)) return;
-      }
-    } else { setPhase('open'); if (!await bot(__('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.'), ok)) return; }
-
-    // 6 — follow-up: problems after payment are solved inside the assistant's permissions
-    let script = sc.problem;
-    for (;;) {
-      const pp = problemPanel(b); setPanel(...pp.nodes); hint(__('اكتمل تسجيل الوصول. المساعد متاح لأي مشكلة.'), 'ok');
-      let problem;
-      if (auto) {
-        if (!script) return;
-        await sleep(1900); if (!ok()) return;
-        for (const ch of script) { pp.ta.value += ch; await sleep(34); if (!ok()) return; }
-        await sleep(550); if (!ok()) return;
-        problem = script; script = null;
-      } else problem = await pp.done;
-      if (!ok()) return;
-      if (!problem) continue;
-      await solve(b, problem, auto, ok, sc); if (!ok()) return;
-      setPhase('open');
-    }
+    if (!cur) { asking(true); return; }
+    await serve(auto, ok, sc);
   }
+  /* the guest can write at any moment, in any order: before identifying, in the middle of the arrival, or after the key */
+  askForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const text = askInput.value.trim(); if (!text || turning) return;
+    askInput.value = '';
+    if (demoOn) takeOver();
+    if (askResolve) { const go = askResolve; askResolve = null; go(text); return; }
+    userAct(); const my = gen, ok = () => my === gen;
+    (async () => {
+      await agentTurn({ type: 'text', text }, ok, false); if (!ok()) return;
+      if (cur) serve(false, ok, {}); else asking(true);
+    })();
+  });
 
   /* ---------- demo film + user control ---------- */
   const SCENES = [
@@ -838,7 +1182,7 @@
       await sleep(800); if (!ok()) return;
       for (const d of sc.key) { addDigit(d); await sleep(120); if (!ok()) return; }
       await sleep(450); if (!ok()) return;
-      await flow(true, ok, { req: sc.req, notReady: sc.notReady, key: sc.pick, problem: sc.problem, move: sc.move }); if (!ok()) return;
+      await journey(true, ok, { req: sc.req, notReady: sc.notReady, key: sc.pick, problem: sc.problem, move: sc.move }); if (!ok()) return;
       await sleep(5200);
     }
   }
@@ -849,7 +1193,7 @@
     refreshScene();
   }
   function takeOver() { userAct(); setMode('id'); clearStage(); }
-  function userSubmit() { userAct(); const my = gen; flow(false, () => my === gen); }
+  function userSubmit() { userAct(); const my = gen; journey(false, () => my === gen); }
   function userDigit(d) {
     if (MID.has(phase) && !demoOn) return;
     userAct();
@@ -874,7 +1218,7 @@
     await sleep(500); if (!ok()) return;
     for (const d of value) { addDigit(d); await sleep(70); if (!ok()) return; }
     await sleep(300); if (!ok()) return;
-    flow(false, ok);
+    journey(false, ok);
   }
   function browse(dir) { if (demoOn) takeOver(); if (cur) return; setScene(active + dir); }
 
@@ -948,6 +1292,12 @@
   $('#ctaDemo').addEventListener('click', () => { toStage(); if (!demoOn) demo(); });
   $('#ctaTry').addEventListener('click', () => { takeOver(); toStage(); });
   $('#navCta').addEventListener('click', () => { if (system === 'events') { $('#evStage').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); $('#evBrief').focus({ preventScroll: true }); } else { takeOver(); toStage(); } });
+  $('#exportLog').addEventListener('click', () => {
+    const data = { exportedAt: new Date().toISOString(), language: lang, note: __('بيانات تجريبية من محاكاة صلة'), log: store.log, trail: store.trail, approvalsWaiting: store.approvals, tickets: store.tickets, sync: SYNC ? SYNC.state().log : [] };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), link = el('a');
+    link.href = url; link.download = 'sila-log-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   $('#resetData').addEventListener('click', () => {
     userAct(); const f = freshState(); Object.keys(f).forEach(k => { store[k] = f[k]; });
     save(); renderHotel(); clearStage(); say(__('استُعيدت البيانات التجريبية.'), 'ok');
@@ -1482,7 +1832,7 @@
     $('#prPct').textContent = (pct > 0 ? '+' : '') + pct + '%';
     $('#prPct').className = pct > 0 ? 'up' : pct < 0 ? 'down' : '';
     const ai = pr.by === 'ai' && pr.pct != null;
-    $('#prBy').textContent = ai ? __('حدّده Claude') : __('حُسب بالقواعد'); $('#prBy').className = 'tag ' + (ai ? 'limit' : 'staff');
+    $('#prBy').textContent = ai ? __('حدّده النموذج') : __('حُسب بالقواعد'); $('#prBy').className = 'tag ' + (ai ? 'limit' : 'staff');
     $('#prWhy').textContent = ai && pr.reason ? pr.reason : PERIODS[periodKey()].label + ' (' + PERIODS[periodKey()].note + __(') · الإشغال ') + Math.round(d.occ * 100) + '% · ' + (d.wk ? __('ليلة نهاية أسبوع') : __('ليلة وسط الأسبوع')) + '.';
     $('#prAi').hidden = !ask;
     $('#prRates').replaceChildren(...CATS.map(c => {
@@ -1496,7 +1846,7 @@
   let pricing = false;
   async function aiPrice() {                       // Claude sets tonight's adjustment inside the hotel's limits
     if (!ask || pricing || S !== store) return;
-    pricing = true; $('#prBy').textContent = __('Claude يحسب…');
+    pricing = true; $('#prBy').textContent = __('النموذج يحسب…');
     const d = demandNow(), was = S.pricing.period;
     try {
       const out = await ask.json(__('أنت محلل تسعير في فندق. حدّد نسبة تعديل سعر الليلة حسب الطلب.\n')
@@ -1650,15 +2000,24 @@
 
   /* ---------- housekeeping and maintenance ---------- */
   function callTeam(kind, text) {
-    const b = me(), label = (kind === 'clean' ? __('طلب تنظيف') : __('بلاغ صيانة')) + __(' للغرفة ') + b.room + (text ? ': ' + short(text) : '');
+    const b = me(), note = text ? short(redact(text)) : '', label = (kind === 'clean' ? __('طلب تنظيف') : __('بلاغ صيانة')) + __(' للغرفة ') + b.room + (note ? ': ' + note : '');
+    const call = { tool: 'open_ticket', args: note ? { kind, text: note } : { kind } }, d = AG.permissions.decide(call, factsFor(b));
+    const tr = Object.assign(trailStart({ type: 'text', shown: redact(text || label) }), { src: 'chat', who: b, intent: kind });
+    const rec = extra => trailAdd(tr, Object.assign({ kind: 'tool', n: 0, tool: call.tool, args: call.args, verdict: d.verdict, tier: d.tier, code: d.code, brain: 'rules' }, extra));
     const open = () => {
-      const n = addTicket(b.room, kind, text ? short(text) : '');
-      log(__('صلة: ') + label + ' (#' + n + ')', 'auto');
+      const n = addTicket(b.room, kind, note);
+      log(__('صلة: ') + label + ' (#' + n + ')', 'limit');
+      partnerSend('ticket', b, { n, kind, text: note });
       reply((kind === 'clean' ? __('استدعيت فريق التنظيف لغرفتك ') : __('استدعيت فريق الصيانة لغرفتك ')) + b.room + __('. رقم البلاغ #') + n + __('، وتقدر تتابعه معي.'));
+      return { ok: true, note: __('بلاغ #') + n };
     };
-    if (S.perms.ticket) return open();
+    if (d.verdict === 'deny') { rec({ result: { ok: false, denied: true } }); return reply(__('هذا خارج ما أستطيع تنفيذه. حوّل طلبك لموظف الاستقبال إن أردت.')); }
+    if (d.verdict === 'allow') return rec({ result: open() });
     reply(__('هذا الطلب يحتاج موافقة موظف الاستقبال الآن. أرسلته له وأرد عليك فور قراره.'));
-    approval(__('صلة: ') + label).then(yes => { if (yes) open(); else reply(__('اعتذر الموظف عن الطلب الآن. تواصل مع الاستقبال للتفاصيل.')); });
+    approval(__('صلة: ') + label).then(yes => {
+      if (yes) rec({ approved: true, result: open() });
+      else { rec({ approved: false, result: { ok: false, declined: true } }); reply(__('اعتذر الموظف عن الطلب الآن. تواصل مع الاستقبال للتفاصيل.')); }
+    });
   }
 
   /* ---------- halls: the guest states what they need, صلة plans it and books the site tour ---------- */
@@ -1936,6 +2295,7 @@
   }
 
   /* ---------- boot ---------- */
+  if (SYNC) SYNC.resume();
   if (ADMIN) { renderHotel(); renderLeads(); document.body.classList.add('in'); return; }
   if (LM_PAGE) { $('#top').classList.add('in'); return; }
 

@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preload" href="fonts/thmanyah-serif-display-regular.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/thmanyah-serif-display-black.woff2?v=2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body data-page="admin">
 <div class="adm" dir="rtl" lang="ar">
@@ -100,7 +100,7 @@
           <b id="prPct"></b>
           <span class="tag" id="prBy"></span>
           <p id="prWhy"></p>
-          <button class="pillbtn" id="prAi" type="button" hidden>اطلب من Claude تحديده</button>
+          <button class="pillbtn" id="prAi" type="button" hidden>اطلب من النموذج تحديده</button>
         </div>
         <div class="pb-rates">
           <span class="flabel">سعر الليلة الآن</span>
@@ -121,6 +121,11 @@
     </section>
 
     <section class="pane" data-pane="trail" hidden>
+      <div class="box">
+        <h2>مسار الوكيل</h2>
+        <p class="cap">كل خطوة للوكيل كما جرت: ما فهمه، الأداة التي اختارها، قرار محرّك الصلاحيات، والنتيجة.</p>
+        <ul class="log trail-log" id="trail"></ul>
+      </div>
       <div class="adm-grid two">
         <div class="box">
           <h2>سجل إجراءات المساعد</h2>
@@ -131,7 +136,13 @@
           <ul class="log" id="evLeads"></ul>
         </div>
       </div>
+      <div class="box">
+        <h2>المزامنة مع نظام الشريك</h2>
+        <p class="cap"><span id="syncState" class="sync-state"></span> <a class="x-inline" href="partner.html" target="_blank" rel="noopener">افتح نظام الشريك ↗</a></p>
+        <ul class="log" id="syncLog"></ul>
+      </div>
       <div class="form-end">
+        <button class="pillbtn" id="exportLog" type="button">تصدير السجل (JSON)</button>
         <button class="pillbtn" id="resetData" type="button">استعادة البيانات التجريبية</button>
       </div>
     </section>
@@ -142,9 +153,9 @@
     var q = new URLSearchParams(location.search).get('lang'), l = q;
     try { if (q !== 'ar' && q !== 'en') l = localStorage.getItem('sila.lang'); } catch (e) {}
     if (l !== 'ar' && l !== 'en') l = /^ar\b/i.test(navigator.language || '') ? 'ar' : 'en';
-    if (l === 'en') document.write('<script src="i18n.en.js?v=9"><\/script>');
+    if (l === 'en') document.write('<script src="i18n.en.js?v=12"><\/script>');
   })();
 </script>
-<script src="app.min.js?v=12"></script>
+<script src="app.min.js?v=15"></script>
 </body>
 </html>
