@@ -25,7 +25,10 @@ import { startStandIn } from './stand-in.mjs';
 const argv = process.argv.slice(2), flag = n => argv.includes('--' + n), opt = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 && argv[i + 1] != null ? argv[i + 1] : d; };
 try { process.loadEnvFile(path.join(ROOT, '.env')); } catch (e) {}
 const hasKey = !!((process.env.SILA_LLM_KEY || '').trim() || process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
-const real = hasKey && !flag('stand-in');
+/* --api URL: send every model call to a deployed copy of the service (e.g. https://sila-kappa.vercel.app/api/ask) instead of calling
+   the provider from this machine. No local key is needed, and it is the path a visitor's browser takes. */
+const API = opt('api', '');
+const real = (hasKey || !!API) && !flag('stand-in');
 let standIn = null;
 if (!real) {
   standIn = await startStandIn();
@@ -75,10 +78,14 @@ let ipN = 0;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function turn(c) {
   const w = world(c.state), lang = /[؀-ۿ]/.test(c.text) ? 'ar' : 'en';
-  let calls = 0, fell = null, wording = null;
+  let calls = 0, fell = null, wording = null; const via = [];
   const ask = async (task, input) => {
     calls++;
-    const r = await ai.handleAsk({ method: 'POST', ip: 'eval-' + (++ipN), body: { task, lang, input } });
+    const r = API
+      ? await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task, lang, input }) })
+        .then(async x => ({ status: x.status, body: await x.json().catch(() => ({})), via: x.headers.get('x-sila-via') || '' }), e => ({ status: 0, body: {}, via: 'no answer from the service: ' + (e && e.cause && e.cause.code || e.message) }))
+      : await ai.handleAsk({ method: 'POST', ip: 'eval-' + (++ipN), body: { task, lang, input } });
+    via.push(task + ' ' + r.status + (r.via ? ' <- ' + r.via : ''));
     if (r.status !== 200) throw new Error('ai ' + r.status);
     return r.body.output;
   };
@@ -94,13 +101,14 @@ async function turn(c) {
     const said = out.steps.filter(s => s.tool).map(s => s.tool.replace(/_/g, ' ') + ': ' + (s.held ? 'waiting for the guest to confirm' : s.result && s.result.ok ? 'done' : 'not done'));
     try { wording = !!(await brain.compose({ input, steps: out.steps, said, facts: '412' })); } catch (e) { wording = false; }
   }
-  return { got: proposed(out.steps), ms, model: calls > 0, fell, wording };
+  return { got: proposed(out.steps), ms, model: calls > 0, fell, wording, via };
 }
 
 /* ---------- run ---------- */
 const host = (process.env.SILA_LLM_URL || (/^gsk_/.test(process.env.SILA_LLM_KEY || '') ? 'api.groq.com' : 'generativelanguage.googleapis.com')).replace(/^https?:\/\//, '').split('/')[0];
 console.log('Sila agent evaluation');
-console.log(real ? 'Model: the configured one, through lib/sila-ai.js (' + (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN ? 'Claude key' : 'provider ' + host) + ')'
+console.log(API ? 'Model: whatever the deployed service uses, through ' + API
+  : real ? 'Model: the configured one, through lib/sila-ai.js (' + (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN ? 'Claude key' : 'provider ' + host) + ')'
   : 'Model: LOCAL STAND-IN, not a language model. It replays the written rules; these numbers say nothing about a real model.');
 console.log(cases.length + ' cases × ' + RUNS + ' run' + (RUNS > 1 ? 's' : '') + (DELAY ? ', ' + DELAY + ' ms between model turns' : '') + '\n');
 
@@ -137,11 +145,22 @@ const why = {}; fell.forEach(x => { why[x.fell] = (why[x.fell] || 0) + 1; });
 Object.keys(why).sort((a, b) => why[b] - why[a]).slice(0, 6).forEach(k => console.log('   ' + String(why[k]).padStart(4) + ' × ' + k));
 if (flag('reply')) { const w = all.filter(x => x.wording != null); console.log('closing reply (second call) passed the claim and number checks: ' + w.filter(x => x.wording).length + ' of ' + w.length + ' (' + pct(w.filter(x => x.wording).length, w.length) + ')'); }
 
+/* what the provider was asked, as the service reported it: one line per try, "model status note" */
+{
+  const tries = all.flatMap(x => x.via || []).flatMap(v => (v.split(' <- ')[1] || '').split(' | ')).filter(Boolean), tally = {};
+  tries.forEach(t => { const m = t.split(' '), k = m[0] + ' ' + (m[1] || ''); tally[k] = (tally[k] || 0) + 1; });
+  const calls = all.reduce((n, x) => n + (x.via ? x.via.length : 0), 0);
+  console.log('\nservice calls: ' + calls + '   provider tries reported: ' + tries.length + (calls ? ' (' + (tries.length / calls).toFixed(2) + ' per call)' : ''));
+  Object.keys(tally).sort((a, b) => tally[b] - tally[a]).slice(0, 12).forEach(k => console.log('   ' + String(tally[k]).padStart(4) + ' × ' + k));
+  const notes = [...new Set(tries.filter(t => / (429|404|503|400) /.test(t + ' ')).map(t => t.slice(0, 220)))].slice(0, 4);
+  notes.forEach(n => console.log('   e.g. ' + n));
+}
+
 if (flag('fails')) {
   console.log('\nnot passed:');
   rows.forEach(r => { const bad = r.runs.filter(x => !x.pass); if (bad.length) console.log('  ' + r.c.id + '  ' + JSON.stringify(r.c.text) + '\n      expected ' + JSON.stringify(r.c.expect) + '   got ' + [...new Set(bad.map(x => JSON.stringify(x.got) + (x.fell ? ' (rules, after: ' + x.fell + ')' : '')))].join('  /  ') + '   in ' + bad.length + '/' + r.runs.length); });
 }
 if (opt('json')) {
-  writeFileSync(opt('json'), JSON.stringify({ model: real ? 'real' : 'stand-in', runs: RUNS, results: rows.map(r => ({ id: r.c.id, cat: r.c.cat, text: r.c.text, expect: r.c.expect, runs: r.runs.map(x => ({ got: x.got, pass: x.pass, ms: Math.round(x.ms), model: x.model, fell: x.fell })) })) }, null, 1));
+  writeFileSync(opt('json'), JSON.stringify({ model: real ? 'real' : 'stand-in', runs: RUNS, results: rows.map(r => ({ id: r.c.id, cat: r.c.cat, text: r.c.text, expect: r.c.expect, runs: r.runs.map(x => ({ got: x.got, pass: x.pass, via: x.via, ms: Math.round(x.ms), model: x.model, fell: x.fell })) })) }, null, 1));
   console.log('\nwritten: ' + opt('json'));
 }

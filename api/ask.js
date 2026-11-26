@@ -10,5 +10,6 @@ export default async function handler(req, res) {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = null; } }
   const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || (req.socket && req.socket.remoteAddress) || '';
   const out = await handleAsk({ method: req.method, body, ip, check: /[?&]check=1\b/.test(req.url || '') });
+  if (out.via) res.setHeader('x-sila-via', out.via);
   res.status(out.status).json(out.body);
 }

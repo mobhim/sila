@@ -26,7 +26,7 @@ http.createServer(async (req, res) => {
       if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
       const body = req.method === 'POST' ? await readBody(req) : null;
       const out = await handleAsk({ method: req.method, body, ip: req.socket.remoteAddress, check: url.searchParams.get('check') === '1' });
-      res.writeHead(out.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...cors });
+      res.writeHead(out.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...cors, ...(out.via ? { 'x-sila-via': out.via } : {}) });
       return res.end(JSON.stringify(out.body));
     }
     const file = url.pathname === '/' ? '/index.html' : url.pathname === '/admin' ? '/admin.html' : url.pathname === '/landmarks' ? '/landmarks.html' : url.pathname === '/partner' ? '/partner.html' : url.pathname;
