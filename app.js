@@ -1893,8 +1893,12 @@
   const H = { who: null, flow: null, pending: null, keep: null };
   const me = () => (H.who && S.bookings.find(b => b.id === H.who)) || null;
   const first = name => name.split(' ')[0];
+  const chatTurns = [];                           // the last turns of the chat window, sent with a question so a follow-up makes sense
   function helpSay(role, text) {
-    const m = el('div', 'm ' + (role === 'user' ? 'guest' : 'bot'), text); helpFeed.append(m);
+    const m = el('div', 'm ' + (role === 'user' ? 'guest' : 'bot'), text); m.dir = 'auto'; helpFeed.append(m);      // an English answer inside the Arabic page reads left to right
+    if (role === 'user') chatTurns.push({ guest: String(text), agent: '' });
+    else if (chatTurns.length) { const t = chatTurns[chatTurns.length - 1]; t.agent = (t.agent ? t.agent + ' ' : '') + String(text); }
+    if (chatTurns.length > 8) chatTurns.shift();
     helpFeed.scrollTo({ top: helpFeed.scrollHeight, behavior: reduced ? 'auto' : 'smooth' }); return m;
   }
   function chips(list) {
@@ -1935,7 +1939,7 @@
       const out = await ask.json(__('أنت «صلة»، مساعد فندق. ') + GUARD
         + __('حدّد قصد النزيل من هذه القائمة فقط: register (يريد التسجيل أو حجز غرفة)، clean (يطلب تنظيفاً)، maint (يبلّغ عن عطل)، mine (يسأل عن حجزه)، prices (الأسعار)، available (الغرف المتاحة)، event (حجز قاعة أو فعالية)، tour (جولة استكشافية)، howto (ماذا تستطيعين)، other.\n')
         + __('إذا كان القصد other فاكتب في reply رداً قصيراً ودوداً ضمن شؤون الفندق فقط، ولا تخترع أسعاراً أو بيانات حجوزات.\n')
-        + __('أعد كائن JSON واحداً فقط: {"intent":"clean","reply":""}\n<<<') + raw.slice(0, 300) + '>>>', { modelTier: 'quick', cache: false }, 'intent', { text: raw.slice(0, 300) });
+        + __('أعد كائن JSON واحداً فقط: {"intent":"clean","reply":""}\n<<<') + raw.slice(0, 300) + '>>>', { modelTier: 'quick', cache: false }, 'intent', { text: raw.slice(0, 300), hotel: hotelContext(), history: chatTurns.slice(0, -1).slice(-6) });
       return out && typeof out.intent === 'string' ? out : null;
     } catch (e) { aiOff(e); return null; }
   }
@@ -2132,7 +2136,7 @@
         const ai = await intentByAi(raw);
         if (!ai) it.intent = was;
         else if (ai.intent !== 'other') it.intent = ai.intent;
-        else if (ai && ai.reply) { wait.remove(); reply(String(ai.reply).slice(0, 500)); helping = false; return; }
+        else if (ai && ai.reply) { wait.remove(); reply(String(ai.reply).slice(0, 700)); helping = false; return; }
       }
       wait.remove();
       if (it.intent === 'login') login(it.key);
