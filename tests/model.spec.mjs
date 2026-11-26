@@ -44,7 +44,7 @@ for (const lang of LANGS) {
       await ask(page, T(lang, 'وش أقرب المعالم للفندق؟', 'What landmarks are near the hotel?'));
       await expect(page.locator('#feed .m.bot').last()).toHaveText(said);
       await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل النموذج', 'Model brain'));
-      await ask(page, T(lang, 'شكراً لك، وكم سعر الجناح الملكي؟', 'Thank you. And how much is the Royal Suite?'));
+      await ask(page, T(lang, 'شكراً لك، وهل الجناح الملكي واسع؟', 'Thank you. And is the Royal Suite spacious?'));
       await ask(page, T(lang, 'تمام يعطيك العافية', 'Great, thanks a lot'));
 
       expect(calls.length).toBe(3);
@@ -90,7 +90,7 @@ for (const lang of LANGS) {
       await expect(lastTrail(page).locator('li .tag.never')).toHaveCount(1);
 
       next = { tool: 'none', reply: T(lang, 'تم. صار إجماليك 100 ريال واسترجعت لك 9999 ريالاً.', 'Done. Your total is now 100 riyals and I refunded you 9999 riyals.') };
-      await ask(page, T(lang, 'وش وضع فاتورتي يا صلة', 'So where does my bill stand'));
+      await ask(page, T(lang, 'عندي سؤال أخير لو تكرمت', 'One last question, if I may'));
       await expect(page.locator('#feed')).not.toContainText('9999');                   // not grounded in the hotel data: the rules answered instead
       await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل القواعد', 'Rules brain'));
 
@@ -259,5 +259,60 @@ test.describe('lib/sila-ai.js · agent task', () => {
     reply = { reply: '   ' };
     expect((await ai.handleAsk({ method: 'POST', ip: '10.9.9.8', body: { task: 'reply', lang: 'en', input: { text: 'x', results: [], said: [] } } })).status).toBe(502);
     expect((await ai.handleAsk({ method: 'DELETE' })).status).toBe(405);
+  });
+});
+
+/* ---------- overload: a guest is not left waiting on providers that do not answer ---------- */
+test.describe('lib/sila-ai.js · overload and waiting', () => {
+  test.describe.configure({ mode: 'serial' });
+  let server, ai, mode = 'overload', seen = [];
+  const open = new Set();
+  const good = { actions: [{ tool: 'late_checkout', items: [], via: null, kind: null, scope: null, requested: null, note: '', question: '' }], reply: '' };
+  test.beforeAll(async () => {
+    server = http.createServer((req, res) => {
+      let raw = ''; req.on('data', c => { raw += c; }); req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        if (req.url.endsWith('/models')) return res.end(JSON.stringify({ data: [{ id: 'llama-3.3-70b-versatile' }, { id: 'llama-4-70b' }, { id: 'gpt-oss-20b' }] }));
+        const model = JSON.parse(raw || '{}').model; seen.push({ model, at: Date.now() });
+        if (mode === 'cut' && seen.length === 1) return req.socket.destroy();          // the connection drops before any answer
+        if (mode === 'overload' && seen.length === 1) { res.statusCode = 503; return res.end('{"error":"overloaded"}'); }
+        if (mode === 'overload') return;                                              // every other model: no answer at all
+        res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(good) } }] }));
+      });
+    });
+    server.on('connection', s => { open.add(s); s.on('close', () => open.delete(s)); });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    delete process.env.ANTHROPIC_API_KEY; delete process.env.ANTHROPIC_AUTH_TOKEN; delete process.env.SILA_MOCK; delete process.env.SILA_LLM_MODEL;
+    delete process.env.SILA_LLM_BUDGET_MS; delete process.env.SILA_LLM_FIRST_MS; delete process.env.SILA_LLM_LATER_MS;
+    process.env.SILA_LLM_KEY = 'gsk_test_key_never_real'; process.env.SILA_LLM_REST_MS = '0';
+    process.env.SILA_LLM_URL = 'http://127.0.0.1:' + server.address().port;
+    ai = await import('../lib/sila-ai.js?overload-test');
+  });
+  test.afterAll(async () => { open.forEach(s => s.destroy()); await new Promise(r => server.close(r)); });
+  const post = () => ai.handleAsk({ method: 'POST', ip: '10.1.0.' + Math.floor(Math.random() * 250), body: { task: 'agent', lang: 'en', input: { text: 'a late checkout please', state: { stage: 'stay' }, hotel: {}, history: [] } } });
+
+  test('a 503 and then silence: the next model gets about 5 seconds, and the whole call ends at about 9', async ({}, info) => {
+    test.skip(info.project.name !== 'desktop', 'server code: once is enough');
+    mode = 'overload'; seen = [];
+    const t0 = Date.now(), out = await post(), took = Date.now() - t0;
+    expect(out.status).toBe(502);                                                     // the page answers from its rules
+    expect(took).toBeGreaterThan(8000); expect(took).toBeLessThan(10000);             // never the 25 seconds of three full waits
+    expect(seen.map(s => s.model)).toEqual(['llama-3.3-70b-versatile', 'llama-4-70b', 'gpt-oss-20b']);
+    const second = seen[2].at - seen[1].at, third = t0 + took - seen[2].at;
+    expect(second).toBeGreaterThan(4500); expect(second).toBeLessThan(5800);          // the shorter wait after an overloaded model
+    expect(third).toBeLessThan(4600);                                                 // what was left of the nine seconds, not five more
+    expect(out.via).toContain('llama-3.3-70b-versatile 503');
+    expect(out.via.match(/no answer in time/g).length).toBe(2);
+  });
+
+  test('a healthy model is answered at once, and a connection cut before any answer is sent once more', async ({}, info) => {
+    test.skip(info.project.name !== 'desktop', 'server code: once is enough');
+    mode = 'fine'; seen = [];
+    let t0 = Date.now(), out = await post();
+    expect(out.status).toBe(200); expect(out.body.output).toEqual(good); expect(seen.length).toBe(1); expect(Date.now() - t0).toBeLessThan(2000);
+    mode = 'cut'; seen = [];
+    t0 = Date.now(); out = await post();
+    expect(out.status).toBe(200); expect(seen.length).toBe(2);                         // the same model, asked again at once
+    expect(seen[0].model).toBe(seen[1].model); expect(Date.now() - t0).toBeLessThan(2000);
   });
 });

@@ -18,6 +18,24 @@
     if (v == null) { if (AR_RE.test(s)) console.warn('i18n: no English for', s); return s; }
     return v;
   };
+  /* What the agent says to a guest follows the language of the guest's last message, not the page's. sayIn(l) words an Arabic
+     source string in that language; ownIn(l) does the same for a sentence the page already holds in its own language.
+     The English strings are fetched the first time an English message is written on the Arabic page. */
+  const dictEN = () => window.SILA_EN || null;
+  const sayIn = l => (s, ctx) => { const d = l === 'en' && dictEN(); if (!d) return s; const v = ctx && d[s + '|' + ctx] != null ? d[s + '|' + ctx] : d[s]; return v == null ? s : v; };
+  let backDict = null;
+  const ownIn = l => text => {
+    const d = dictEN(); if (l === lang || !d || text == null) return text;
+    if (l === 'en') return d[text] != null ? d[text] : text;
+    backDict = backDict || Object.keys(d).reduce((m, k) => { if (!(d[k] in m)) m[d[k]] = k.split('|')[0]; return m; }, {});
+    return backDict[text] || text;
+  };
+  const APP_V = ((document.currentScript && document.currentScript.src) || '').split('?v=')[1] || '';
+  let enLoading = null;
+  const needEnglish = () => (dictEN() ? Promise.resolve(true) : enLoading || (enLoading = new Promise(res => {
+    const sc = document.createElement('script'); sc.src = 'i18n.en.js' + (APP_V ? '?v=' + APP_V : '');
+    sc.onload = () => res(true); sc.onerror = () => { enLoading = null; res(false); }; document.head.append(sc);
+  })));
   document.documentElement.lang = lang;
   document.documentElement.dir = EN ? 'ltr' : 'rtl';
   if (EN) {                                       // the static page is written in Arabic; translate it in place
@@ -93,7 +111,7 @@
   if (!ADMIN) save();
 
   const VAT = 0.15, STATE = { ready: __('جاهز'), prep: __('قيد التجهيز'), maint: __('صيانة') }, NEXT = { ready: 'prep', prep: 'maint', maint: 'ready' };
-  const TIER = { auto: __('تلقائي'), limit: __('ضمن الحد'), staff: __('موظف'), wait: __('بانتظار موافقة'), ok: __('بموافقة موظف'), no: __('مرفوض'), never: __('ممنوع'), ask: __('تأكيد النزيل') };
+  const TIER = { auto: __('تلقائي'), limit: __('ضمن الحد'), staff: __('موظف'), wait: __('بانتظار موافقة'), ok: __('بموافقة موظف'), no: __('مرفوض'), never: __('ممنوع'), ask: __('بانتظار تأكيد النزيل') };
   const roomOf = b => S.rooms.find(r => r.no === b.room);
   const occupant = no => S.bookings.find(b => b.room === no);
   const altFor = b => { const r = roomOf(b); return r && S.rooms.find(x => x.no !== r.no && x.cat === r.cat && x.state === 'ready' && !occupant(x.no)); };
@@ -127,7 +145,7 @@
        rate = Math.round(base * (1 + pct / 100)), sub = rate * b.nights, vat = sub * VAT; return { base, pct, rate, sub, vat, total: sub + vat }; };
   const dateFmt = new Intl.DateTimeFormat(EN ? 'en-GB' : 'ar-SA-u-ca-gregory-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
   const checkout = b => { const d = new Date(); d.setDate(d.getDate() + b.nights); return dateFmt.format(d) + __('، ') + (b.late ? '1:00' : '12:00') + __(' ظهراً'); };
-  const nightsText = n => EN ? (n === 1 ? '1 night' : n + ' nights') : n === 1 ? 'ليلة واحدة' : n === 2 ? 'ليلتان' : n <= 10 ? n + ' ليالٍ' : n + ' ليلة';
+  const nightsText = (n, en = EN) => en ? (n === 1 ? '1 night' : n + ' nights') : n === 1 ? 'ليلة واحدة' : n === 2 ? 'ليلتان' : n <= 10 ? n + ' ليالٍ' : n + ' ليلة';
   const clockFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
   const nowTime = () => clockFmt.format(new Date());
   const passcode = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); return String(a[0] % 1000000).padStart(6, '0'); };
@@ -256,7 +274,7 @@
     const t = el('div', 'm bot typing'); t.append(el('i'), el('i'), el('i')); push(t);
     await sleep(Math.min(1000, 380 + text.length * 9));
     if (!ok()) { t.remove(); return false; }
-    t.className = 'm bot'; t.textContent = text; if (extra) t.append(extra);
+    t.className = 'm bot'; t.dir = 'auto'; t.textContent = text; if (extra) t.append(extra);      // an English answer on the Arabic page reads left to right
     toEnd(); await sleep(420);
     return ok();
   }
@@ -357,10 +375,10 @@
        the page runs on its written rules. The server is given the task name and the raw input only. */
     const API = API_URL;
     const remote = {
-      async json(prompt, opts, task, input) {
-        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+      async json(prompt, opts, task, input, l) {
+        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 11000);      // the server gives up at about 9 seconds; past that the rules answer
         try {
-          const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task, lang, input }), signal: ctl.signal });
+          const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task, lang: l === 'ar' || l === 'en' ? l : lang, input }), signal: ctl.signal });
           if (r.status === 503) throw Object.assign(new Error('ai off'), { code: 'capability_disabled' });
           if (!r.ok) throw new Error('ai ' + r.status);
           return (await r.json()).output;
@@ -369,8 +387,8 @@
     };
     fetch(API).then(r => (r.ok ? r.json() : null)).then(j => {
       if (!j || !j.ai) return;
-      ask = remote; modelBrain = AG.brains.model.create({ ask: (task, input) => remote.json('', null, task, input), hotel: () => hotelContext() });
-      chatBrain = AG.brains.model.create({ ask: (task, input) => remote.json('', null, task, input), hotel: () => hotelContext(me()), channel: 'chat', flows: ['start_registration', 'plan_event', 'book_tour'] });
+      ask = remote; modelBrain = AG.brains.model.create({ ask: (task, input, l) => remote.json('', null, task, input, l), hotel: () => hotelContext() });
+      chatBrain = AG.brains.model.create({ ask: (task, input, l) => remote.json('', null, task, input, l), hotel: () => hotelContext(me()), channel: 'chat', flows: ['start_registration', 'plan_event', 'book_tour'] });
       $('#aiTag').hidden = false; $('#helpAi').hidden = false; $('#evAiTag').hidden = false; $('#prAi').hidden = false;
     }).catch(() => {});
   }
@@ -585,6 +603,7 @@
       rooms: CATS.map(c => { const mine = S.rooms.filter(r => r.cat === c.key); return mine.length ? { category: c.key, nightlyRate: rateNow(mine[0]), rooms: mine.length, vacantAndReady: mine.filter(r => r.state === 'ready' && !occupant(r.no)).length } : null; }).filter(Boolean),
       bill: b ? { nightlyRate: t.rate, nights: b.nights, total: money(t.total), paid: !!b.paid } : null,
       policies: POLICIES,
+      halls: HALLS.map(h => ({ name: h.name, areaSqm: h.w * h.d, fullDayRate: h.rate })),      // for a question asked while planning an event
       landmarks: LANDMARKS.map(c => ({ city: c[0], about: c[1], places: c[2].map(p => p[0] + ': ' + p[1]) }))
     };
   }
@@ -660,6 +679,7 @@
      offer on the table and its own place to speak; a tool is handed the surface its turn belongs to (the chat's is CHATC, below). */
   const STAGE = {
     stage: true, get b() { return cur; }, set b(v) { cur = v; }, session, buf: null,
+    tongue: null, get say() { return sayIn(STAGE.tongue || lang); }, get own() { return ownIn(STAGE.tongue || lang); },      // the language of the guest's last message
     bot: (t, ok, x) => (STAGE.buf ? keep(STAGE, { t, x }, ok) : bot(t, ok, x)), push: n => (STAGE.buf ? (keep(STAGE, { node: n }), n) : push(n)), put: n => push(n), panel: (...n) => setPanel(...n), hint: (t, tone) => hint(t, tone), phase: p => setPhase(p), showRoom: (r, ok) => showRoom(r, ok), end: () => toEnd()
   };
   /* When the model brain runs a turn, what the agent would say is kept back until the tools have finished. The model is then
@@ -677,7 +697,7 @@
     let text = null;
     if (lines.length && brain && brain.compose && modelOn() && planned.some(s => !s.held)
       && !steps.some(s => s.say === 'free' || (s.verdict === 'deny' && s.tier === 'never'))) {      // a never-tier refusal is said in the hotel's own words, always
-      try { text = await brain.compose({ input, steps, said: lines.map(m => m.t), facts: c.b ? c.b.room : '' }); } catch (e) { modelDown(); }
+      try { text = await brain.compose({ input, steps, said: lines.map(m => m.t), facts: c.b ? c.b.room : '', paid: c.b ? !!c.b.paid : undefined, lang: c.tongue || lang }); } catch (e) { modelDown(); }
     }
     if (!text || !ok()) return release(c, ok);
     c.buf = null;
@@ -744,7 +764,7 @@
     target_unavailable: __('لا غرفة بديلة جاهزة من نفس الفئة'), refunded: __('المبلغ مُسترجع'), no_contact: __('لا وسيلة تواصل على الحجز')
   };
   const verdictOf = e => {                         // [tag class, tag text, plain sentence]
-    if (e.held) return ['ask', TIER.ask, __('اقتراح من النموذج: لا يُنفَّذ قبل تأكيد النزيل')];
+    if (e.held) return ['ask', TIER.ask, __('بانتظار تأكيد النزيل: اقتراح من النموذج، لم يُنفَّذ بعد')];
     if (e.result && e.result.error) return ['no', TIER.no, __('تعذّر التنفيذ: خلل في الأداة')];
     if (e.verdict === 'deny') return e.tier === 'never' ? ['never', TIER.never, WHY[e.code] || WHY.forbidden] : ['no', TIER.no, WHY[e.code] || ''];
     if (e.verdict === 'approve') {
@@ -757,7 +777,7 @@
 
   /* ---------- the trail: on the guest screen as it happens, and in the store for the admin console ---------- */
   let turnN = 0;
-  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), heard: heardOf(input), node: null, rows: {}, intent: null, intents: [], src: 'stage', ui: STAGE }; }
+  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), typed: input.type === 'text', heard: heardOf(input), node: null, rows: {}, intent: null, intents: [], src: 'stage', ui: STAGE }; }
   const AFTER = ['apology', 'fallback', 'next_step', 'offer_move', 'unhandled'];      // steps the agent adds on its own; the rest is what the guest asked for
   function trailNode(tr) {
     if (tr.node || !tr.ui) return;
@@ -781,16 +801,51 @@
         tr.ui.end();
       }
     }
+    if (answerHeld(tr, e)) { save(); renderTrail(); }      // the guest's yes or no, written onto the entry that was waiting for it
     if (e.waiting) return;                          // the store keeps the outcome, not the wait
-    const b = tr.who || cur, v = e.kind === 'tool' ? verdictOf(e) : null;
+    const b = tr.who || cur, v = e.kind === 'tool' ? verdictOf(e) : null, held = e.kind === 'tool' && !!e.held;
+    if (held) tr.lastHold = tr.id + ':' + e.n;
     S.trail.unshift({
+      /* a call a model proposed has not been allowed or refused yet: it waits for the guest. The entry says so, and is updated when they answer. */
+      held, hold: held ? tr.lastHold : '', status: held ? 'waiting_guest' : '',
       t: nowTime(), turn: tr.id, src: tr.src, room: b ? b.room : '', guest: b ? mask(b.id) : '', heard: short(tr.heard), intent: tr.intent || '', brain: e.brain || 'rules',
-      kind: e.kind, tool: e.tool || '', say: e.say || '', args: e.tool ? argsText(e.args) : '', verdict: e.verdict || '', tier: e.tier || '', code: e.code || '',
+      kind: e.kind, tool: e.tool || '', say: e.say || '', args: e.tool ? argsText(e.args) : '', verdict: held ? 'held' : e.verdict || '', tier: held ? '' : e.tier || '', code: e.code || '',
       approved: e.approved == null ? null : !!e.approved, amount: e.amount == null ? null : Math.round(e.amount * 100) / 100, tag: v ? v[0] : '', result: (e.result && e.result.note) || ''
     });
     if (S.trail.length > 150) S.trail.length = 150;
     save(); renderTrail();
   }
+  /* ---------- a held call and the guest's answer ----------
+     status: waiting_guest -> confirmed (then the entry carries the real verdict) | waiting_staff | cancelled | lapsed */
+  const HELD_TEXT = () => ({ waiting_guest: __('بانتظار تأكيد النزيل: لم يُنفَّذ بعد'), waiting_staff: __('أكّده النزيل، وهو الآن بانتظار موظف'), confirmed: __('أكّده النزيل'),
+    cancelled: __('ألغاه النزيل: لم يُنفَّذ'), lapsed: __('لم يؤكّده النزيل: لم يُنفَّذ') });
+  const heldEntry = id => (id ? S.trail.find(x => x.hold === id && x.held) : null);
+  function answerHeld(tr, e) {
+    const kept = ((tr.ui || STAGE).session.confirm || []).filter(k => k.hold);
+    if (!kept.length) return false;
+    if (e.kind === 'say' && e.say === 'confirm_no') {
+      let n = 0; kept.forEach(k => { const x = heldEntry(k.hold); if (x && x.status === 'waiting_guest') { x.status = 'cancelled'; x.tag = 'no'; x.verdict = 'cancelled'; x.answered = nowTime(); n++; } });
+      return n > 0;
+    }
+    if (e.kind !== 'tool' || e.intent !== 'confirmed') return false;
+    tr.answered = tr.answered || [];
+    const k = kept.find(i => i.tool === e.tool && (!tr.answered.includes(i.hold) || tr.answering === i.hold));
+    const x = k && heldEntry(k.hold);
+    if (!x) return false;
+    if (!tr.answered.includes(k.hold)) tr.answered.push(k.hold);
+    tr.answering = e.waiting ? k.hold : null;      // a call that goes on to staff is written twice: while it waits, and when they decide
+    const v = verdictOf(e);
+    Object.assign(x, { status: e.waiting ? 'waiting_staff' : 'confirmed', answered: nowTime(), verdict: e.verdict || '', tier: e.tier || '', code: e.code || '', tag: v[0],
+      approved: e.approved == null ? null : !!e.approved, amount: e.amount == null ? null : Math.round(e.amount * 100) / 100, result: (e.result && e.result.note) || '' });
+    return true;
+  }
+  /* a held call the guest neither confirmed nor cancelled before writing something else is dropped: the entry says it never ran */
+  function lapseHeld(list) {
+    let n = 0; (list || []).forEach(k => { const x = heldEntry(k.hold); if (x && x.status === 'waiting_guest') { x.status = 'lapsed'; x.tag = 'no'; x.verdict = 'lapsed'; n++; } });
+    if (n) { save(); renderTrail(); }
+  }
+  /* what the console shows for an entry, in words: the JSON export carries the same */
+  const stateOf = e => (e.kind !== 'tool' ? '' : [TIER[e.tag] || '', e.held ? HELD_TEXT()[e.status] || '' : '', WHY[e.code] || ''].filter(Boolean).join(' · '));
   const argsText = a => { try { return redact(JSON.stringify(a || {})).slice(0, 160); } catch (x) { return ''; } };
   function renderTrail() {
     const ul = $('#trail'); ul.textContent = '';
@@ -801,6 +856,7 @@
       else if (e.kind === 'limit') body.append(__('توقفت: بلغت الحد الأقصى للخطوات في الرسالة.'));
       else body.append(__('ردّ على النزيل'));
       line.append((e.room ? __('الغرفة ') + e.room + ' · ' : '') + __('فهمت: ') + (INTENT_LABEL[e.intent] || INTENT_LABEL.other)
+        + (e.kind === 'tool' && e.held && HELD_TEXT()[e.status] ? ' · ' + HELD_TEXT()[e.status] : '')
         + (e.kind === 'tool' && WHY[e.code] ? ' · ' + WHY[e.code] : '') + ' · ' + (e.brain === 'model' ? __('عقل النموذج') : __('عقل القواعد')));
       body.append(line);
       li.append(el('time', '', e.t), body);
@@ -809,10 +865,11 @@
     });
   }
   /* a memory for each booking: what that guest said and what was done, kept under their booking only */
+  const didOf = steps => steps.filter(s => s.tool).map(s => s.tool + ':' + (s.result && s.result.ok ? 'ok' : s.result && s.result.denied ? 'denied' : s.result && s.result.declined ? 'declined' : 'no'));
   function remember(b, tr, steps, said) {
     if (!b) return;
     const m = S.memory[b.id] || (S.memory[b.id] = []);
-    m.push({ t: nowTime(), heard: redact(tr.heard).slice(0, 200), said: redact(said || '').slice(0, 300), intent: tr.intent || '', did: steps.filter(s => s.tool).map(s => s.tool + ':' + (s.result && s.result.ok ? 'ok' : s.result && s.result.denied ? 'denied' : s.result && s.result.declined ? 'declined' : 'no')) });
+    m.push({ t: nowTime(), at: Date.now(), typed: !!tr.typed, heard: redact(tr.heard).slice(0, 200), said: redact(said || '').slice(0, 300), intent: tr.intent || '', did: didOf(steps) });
     if (m.length > 20) m.splice(0, m.length - 20);
     save();
   }
@@ -827,18 +884,19 @@
     c.panel(...codePanel(b)); await c.showRoom(b.room, ok);
     return old;
   }
-  const billLine = (b, t) => {
-    const adj = t.pct ? __(' بعد تعديل الطلب (') + PERIODS[periodKey()].label + __('، ') + (t.pct > 0 ? '+' : '') + t.pct + '%)' : '';
-    return __('سعر الليلة ') + t.rate + __(' ر.س') + adj + __('، والإجمالي ') + money(t.total) + __(' شاملاً ضريبة القيمة المضافة.');
+  const same = x => x;
+  const billLine = (b, t, say = __, own = same) => {
+    const adj = t.pct ? say(' بعد تعديل الطلب (') + own(PERIODS[periodKey()].label) + say('، ') + (t.pct > 0 ? '+' : '') + t.pct + '%)' : '';
+    return say('سعر الليلة ') + t.rate + say(' ر.س') + adj + say('، والإجمالي ') + money(t.total) + say(' شاملاً ضريبة القيمة المضافة.');
   };
-  const ratesLine = () => {
+  const ratesLine = (say = __, own = same) => {
     const pct = pricePct();
-    return __('أسعار الليلة (') + PERIODS[periodKey()].label + (pct ? __('، ') + (pct > 0 ? '+' : '') + pct + '%' : '') + '): '
-      + CATS.map(c => { const r = S.rooms.find(x => x.cat === c.key); return r ? c.key + ' ' + rateNow(r) + __(' ر.س') : ''; }).filter(Boolean).join(__('، ')) + '.';
+    return say('أسعار الليلة (') + own(PERIODS[periodKey()].label) + (pct ? say('، ') + (pct > 0 ? '+' : '') + pct + '%' : '') + '): '
+      + CATS.map(k => { const r = S.rooms.find(x => x.cat === k.key); return r ? own(k.key) + ' ' + rateNow(r) + say(' ر.س') : ''; }).filter(Boolean).join(say('، ')) + '.';
   };
   const TOOLS = {
     async find_booking(a, d, x, ok, c = STAGE) {
-      if (!a.key) { const b = c.b; if (!b) { await speak('need_id', null, ok, undefined, c); return { ok: false }; } await c.bot(__('حجزك: ') + bookingLine(b), ok); return { ok: true, note: __('الجناح ') + b.room }; }
+      if (!a.key) { const b = c.b; if (!b) { await speak('need_id', null, ok, undefined, c); return { ok: false }; } await c.bot(c.say('حجزك: ') + bookingLine(b, c.say, c.own, (c.tongue || lang) === 'en'), ok); return { ok: true, note: __('الجناح ') + b.room }; }
       if (!c.stage) return { ok: false };              // the chat window signs a guest in itself
       const by = a.by || (/^05/.test(a.key) ? 'phone' : 'id'), M = MODES[by];
       c.phase('link'); if (mode !== by) setMode(by); entry = a.key; renderId(); c.panel(busyPanel(__('جارٍ البحث عن الحجز…'))); c.hint('');
@@ -847,13 +905,13 @@
       if (!b) {
         c.phase('none'); shake(); panelEl.classList.remove('auto'); c.panel(keypadEl);
         c.hint(__('لا يوجد حجز بهذا الرقم. تأكد منه أو جرّب ') + (by === 'id' ? __('رقم الجوال') : __('رقم الهوية')) + '.', 'bad');
-        await c.bot(__('لا يوجد حجز مرتبط بهذا الرقم.'), ok); return { ok: false, note: __('لا حجز بهذا الرقم') };
+        await c.bot(c.say('لا يوجد حجز مرتبط بهذا الرقم.'), ok); return { ok: false, note: __('لا حجز بهذا الرقم') };
       }
       if (c.b !== b) resetSession();
       c.b = b; { const r = roomOf(b); setScene(catIdx(r ? r.cat : '')); }
       c.panel(...codePanel(b)); await c.showRoom(b.room, ok); if (!ok()) return { ok: false };
       c.hint(__('رمز الحجز: ') + M.label + __(' وفي نهايته الغرفة ') + b.room + '.', 'ok');
-      if (b.arrivedAt) { if (!await c.bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false }; c.push(factsCard(b)); await sleep(900); }
+      if (b.arrivedAt) { if (!await c.bot(c.say('أهلاً ') + b.name + c.say('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false }; c.push(factsCard(b)); await sleep(900); }
       return { ok: true, note: __('الجناح ') + b.room };
     },
     async check_in(a, d, x, ok, c = STAGE) {
@@ -863,7 +921,7 @@
         log(__('تسجيل وصول ') + b.name + __(' ب', 'by') + MODES[mode].label + __(' · الجناح ') + b.room, 'auto');
         partnerSend('check_in', b, { at: b.arrivedAt });
       }
-      if (!await c.bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false };
+      if (!await c.bot(c.say('أهلاً ') + b.name + c.say('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false };
       c.push(factsCard(b)); await sleep(900);
       return { ok: true, note: __('الوصول ') + b.arrivedAt };
     },
@@ -872,35 +930,35 @@
       if (a.note) {
         log(__('ملاحظة من نزيل الجناح ') + b.room + ': ' + short(items[0].request), 'staff');
         partnerSend('request', b, { items: [{ request: items[0].request, dept: 'reception' }] });
-        await c.bot(__('سجّلت ملاحظتك وحوّلتها لموظف الاستقبال، وسيتواصل معك.'), ok);
+        await c.bot(c.say('سجّلت ملاحظتك وحوّلتها لموظف الاستقبال، وسيتواصل معك.'), ok);
         return { ok: true, note: DEPTS[2] };
       }
       if (c.b && stageOf(c.b, c) !== 'stay') { c.panel(busyPanel(__('جارٍ تسجيل الطلبات…'))); c.hint(''); }
       b.requests = (c.session.reqDone ? b.requests || [] : []).concat(items.map(i => i.request)).slice(-12); c.session.reqDone = true; save(); renderRows();
       items.forEach(i => log(__('طلب ') + b.name + ': ' + i.request + ' ← ' + i.dept, 'auto'));
       partnerSend('request', b, { items: a.items.map((i, k) => ({ request: items[k].request, dept: i.dept })) });
-      await c.bot(__('سجّلت طلباتك وحوّلتها للأقسام المختصة:'), ok, listNode(items));
+      await c.bot(c.say('سجّلت طلباتك وحوّلتها للأقسام المختصة:'), ok, listNode(items));
       return { ok: true, note: items.map(i => i.dept).filter((v, i, l) => l.indexOf(v) === i).join(__('، ')) };
     },
     async get_room_status(a, d, x, ok, c = STAGE) {
       const b = c.b, r = roomOf(b), alt = altFor(b), state = r ? r.state : 'ready';
       const note = STATE[state] + (state !== 'ready' && alt ? __(' · بديل جاهز: ') + alt.no : '');
-      if (state === 'ready') { if (x.first) await c.bot(__('جناحك ') + b.room + __(' جاهز.'), ok); return { ok: true, note }; }
-      const why = state === 'maint' ? __('تحت الصيانة', 'why') : __('قيد التجهيز', 'why');
-      if (b.key) await c.bot(fill(__('جناحك {room} الآن {why}.'), { room: b.room, why }), ok);
-      else if (c.session.waiting) await c.bot(fill(__('جناحك {room} ما زال {why}. سأبلغك فور جاهزيته.'), { room: b.room, why }), ok);
-      else await c.bot(__('جناحك ') + b.room + __(' محجوز لك لكنه ') + why + __('، لذلك لا أصدر مفتاحه الآن.') + (alt ? __(' عندي جناح جاهز من نفس الفئة وبنفس السعر: ') + alt.no + '.' : ''), ok);
+      if (state === 'ready') { if (x.first) await c.bot(c.say('جناحك ') + b.room + c.say(' جاهز.'), ok); return { ok: true, note }; }
+      const why = state === 'maint' ? c.say('تحت الصيانة', 'why') : c.say('قيد التجهيز', 'why');
+      if (b.key) await c.bot(fill(c.say('جناحك {room} الآن {why}.'), { room: b.room, why }), ok);
+      else if (c.session.waiting) await c.bot(fill(c.say('جناحك {room} ما زال {why}. سأبلغك فور جاهزيته.'), { room: b.room, why }), ok);
+      else await c.bot(c.say('جناحك ') + b.room + c.say(' محجوز لك لكنه ') + why + c.say('، لذلك لا أصدر مفتاحه الآن.') + (alt ? c.say(' عندي جناح جاهز من نفس الفئة وبنفس السعر: ') + alt.no + '.' : ''), ok);
       return { ok: true, note };
     },
     async get_rates(a, d, x, ok, c = STAGE) {
       const b = c.b;
       if (a.scope === 'bill' && b) {
         const t = bill(b);
-        if (b.paid) await c.bot(__('رسوم إقامتك مدفوعة مسبقاً.') + ' ' + __('الإجمالي') + ' ' + money(t.total) + '.', ok);
-        else await c.bot((x.first ? '' : __('جناحك جاهز. ')) + billLine(b, t), ok);
+        if (b.paid) await c.bot(c.say('رسوم إقامتك مدفوعة مسبقاً.') + ' ' + c.say('الإجمالي') + ' ' + money(t.total) + '.', ok);
+        else await c.bot((x.first ? '' : c.say('جناحك جاهز. ')) + billLine(b, t, c.say, c.own), ok);
         return { ok: true, note: __('الإجمالي') + ' ' + money(t.total) };
       }
-      await c.bot(ratesLine(), ok);
+      await c.bot(ratesLine(c.say, c.own), ok);
       return { ok: true, note: PERIODS[periodKey()].label };
     },
     async issue_key(a, d, x, ok, c = STAGE) {
@@ -908,13 +966,13 @@
       if (a.via === 'card') {
         b.key = 'card'; log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff');
         save(); renderRows(); c.phase('open');
-        await c.bot(__('بطاقتك جاهزة عند موظف الاستقبال، اذكر له رقم هويتك أو جوالك فقط. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + '.', ok);
+        await c.bot(c.say('بطاقتك جاهزة عند موظف الاستقبال، اذكر له رقم هويتك أو جوالك فقط. جناحك ') + b.room + c.say(' في الطابق ') + floorOf(b.room) + '.', ok);
         return { ok: true, note: __('بطاقة من الاستقبال') };
       }
       b.key = 'code'; b.via = a.via; c.push(keyMessage(b, a.via, passcode()));
       log(__('إصدار رمز دخول للجناح ') + b.room + __(' وإرساله ') + (a.via === 'sms' ? __('برسالة SMS') : __('بالبريد')), 'auto');
       save(); renderRows(); c.phase('open');
-      await c.bot(__('أرسلت رمز الدخول ') + (a.via === 'sms' ? __('برسالة SMS') : __('إلى بريدك')) + __('. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + __('. إقامة سعيدة.'), ok);
+      await c.bot(c.say('أرسلت رمز الدخول ') + (a.via === 'sms' ? c.say('برسالة SMS') : c.say('إلى بريدك')) + c.say('. جناحك ') + b.room + c.say(' في الطابق ') + floorOf(b.room) + c.say('. إقامة سعيدة.'), ok);
       return { ok: true, note: a.via === 'sms' ? __('برسالة SMS') : __('بالبريد') };
     },
     async reissue_key(a, d, x, ok, c = STAGE) {
@@ -922,17 +980,17 @@
       if (a.via === 'card') {
         if (b.key === 'card') {
           log(__('إرسال موظف لتبديل بطاقة الجناح ') + b.room, 'staff');
-          await c.bot(__('مفتاحك بطاقة من الاستقبال. أبلغت الموظف ليبدّلها لك حالاً.'), ok);
+          await c.bot(c.say('مفتاحك بطاقة من الاستقبال. أبلغت الموظف ليبدّلها لك حالاً.'), ok);
         } else {
           b.key = 'card'; save(); renderRows(); log(__('تجهيز بطاقة بديلة للجناح ') + b.room + __(' عند الاستقبال'), 'staff');
-          await c.bot(__('لم يوافق الموظف على رمز جديد. جهّزت لك بطاقة عند الاستقبال.'), ok);
+          await c.bot(c.say('لم يوافق الموظف على رمز جديد. جهّزت لك بطاقة عند الاستقبال.'), ok);
         }
         return { ok: true, note: __('بطاقة من الاستقبال') };
       }
-      if (d.verdict === 'allow' && !await c.bot(__('راجعت حجزك: الدفع مكتمل والجناح ') + b.room + __(' باسمك، فالخلل في الرمز نفسه.'), ok)) return { ok: false };
+      if (d.verdict === 'allow' && !await c.bot(c.say('راجعت حجزك: الدفع مكتمل والجناح ') + b.room + c.say(' باسمك، فالخلل في الرمز نفسه.'), ok)) return { ok: false };
       c.push(keyMessage(b, b.via, passcode()));
       done(__('إلغاء الرمز القديم وإصدار رمز جديد للجناح ') + b.room, d);
-      await c.bot(__('ألغيت الرمز القديم وأرسلت لك رمزاً جديداً. وإن فضّلت، بطاقة من الاستقبال متاحة لك في أي وقت.'), ok);
+      await c.bot(c.say('ألغيت الرمز القديم وأرسلت لك رمزاً جديداً. وإن فضّلت، بطاقة من الاستقبال متاحة لك في أي وقت.'), ok);
       return { ok: true, note: __('رمز جديد، والقديم أُلغي') };
     },
     async open_ticket(a, d, x, ok, c = STAGE) {
@@ -940,7 +998,7 @@
       const n = addTicket(b.room, a.kind, text);
       done(a.kind === 'maint' ? __('بلاغ صيانة عاجل للجناح ') + b.room + (text ? ': ' + text : '') : __('مهمة تنظيف عاجلة للجناح ') + b.room, d);
       partnerSend('ticket', b, { n, kind: a.kind, text });
-      await c.bot(a.kind === 'maint' ? __('فتحت بلاغ صيانة عاجلاً للجناح ') + b.room + '.' : __('أرسلت فريق التدبير الفندقي إلى جناحك الآن.'), ok);
+      await c.bot(a.kind === 'maint' ? c.say('فتحت بلاغ صيانة عاجلاً للجناح ') + b.room + '.' : c.say('أرسلت فريق التدبير الفندقي إلى جناحك الآن.'), ok);
       return { ok: true, note: __('بلاغ #') + n };
     },
     async move_room(a, d, x, ok, c = STAGE) {
@@ -950,29 +1008,29 @@
       c.session.waiting = false; c.session.offer = false;
       done(__('نقل ') + b.name + __(' من ') + old + __(' إلى ') + b.room + __(' (نفس الفئة)'), d);
       partnerSend('room_change', b, { from: old, to: b.room, fromState: a.why === 'maint' ? 'maint' : null });
-      if (b.key === 'code') { c.push(keyMessage(b, b.via, passcode())); await c.bot(__('نقلتك إلى الجناح ') + b.room + __(' وأرسلت رمزه. الرمز القديم أُلغي.'), ok); }
-      else if (b.key === 'card') { log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff'); await c.bot(__('نقلتك إلى الجناح ') + b.room + __('. بطاقته جاهزة عند الاستقبال.'), ok); }
-      else { if (had === 'readiness') c.hint(__('رمز الحجز تحدّث: الغرفة ') + b.room + '.', 'ok'); await c.bot(__('نقلتك إلى الجناح ') + b.room + __('. هو جاهز الآن.'), ok); }
+      if (b.key === 'code') { c.push(keyMessage(b, b.via, passcode())); await c.bot(c.say('نقلتك إلى الجناح ') + b.room + c.say(' وأرسلت رمزه. الرمز القديم أُلغي.'), ok); }
+      else if (b.key === 'card') { log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff'); await c.bot(c.say('نقلتك إلى الجناح ') + b.room + c.say('. بطاقته جاهزة عند الاستقبال.'), ok); }
+      else { if (had === 'readiness') c.hint(__('رمز الحجز تحدّث: الغرفة ') + b.room + '.', 'ok'); await c.bot(c.say('نقلتك إلى الجناح ') + b.room + c.say('. هو جاهز الآن.'), ok); }
       return { ok: true, note: old + ' ← ' + b.room };
     },
     async late_checkout(a, d, x, ok, c = STAGE) {
       const b = c.b;
       b.late = true; save(); renderRows();
       done(__('تأخير مغادرة ') + b.name + __(' ساعة إلى 1:00 ظهراً'), d);
-      await c.bot(__('مدّدت مغادرتك ساعة إلى 1:00 ظهراً.'), ok);
+      await c.bot(c.say('مدّدت مغادرتك ساعة إلى 1:00 ظهراً.'), ok);
       return { ok: true, note: __('المغادرة 1:00 ظهراً') };
     },
     async compensate(a, d, x, ok, c = STAGE) {
       const b = c.b, amt = d.amount;
       b.comp = Math.max(b.comp || 0, amt); save(); renderRows();
       done(__('تعويض النزيل ') + b.name + __(' بمبلغ ') + money(amt) + __(' (الحد ') + S.perms.limit + __(' ر.س)'), d);
-      await c.bot(__('واعتذاراً عن الإزعاج عوّضتك بمبلغ ') + money(amt) + __(' يُعاد إلى وسيلة الدفع نفسها.'), ok);
+      await c.bot(c.say('واعتذاراً عن الإزعاج عوّضتك بمبلغ ') + money(amt) + c.say(' يُعاد إلى وسيلة الدفع نفسها.'), ok);
       return { ok: true, note: money(amt) };
     },
     async request_staff_approval(a, d, x, ok, c = STAGE) {          // reached only after a staff member said yes
       const b = c.b;
       b.refunded = true; save(); renderRows();
-      await c.bot(__('وافق الموظف. يُعاد المبلغ كاملاً إلى وسيلة الدفع نفسها.'), ok);
+      await c.bot(c.say('وافق الموظف. يُعاد المبلغ كاملاً إلى وسيلة الدفع نفسها.'), ok);
       return { ok: true, note: __('استرجاع كامل') + ' ' + money(d.amount) };
     }
   };
@@ -991,7 +1049,7 @@
   async function askStaff(call, d, ok, c = STAGE) {
     const refund = call.tool === 'request_staff_approval';
     c.panel(busyPanel(refund ? __('بانتظار قرار الموظف…') : __('بانتظار موافقة الموظف…'))); c.hint(__('الطلب الآن عند موظف الاستقبال في لوحة الإدارة.'), 'warn');
-    if (!await c.bot(refund ? __('الاسترجاع الكامل خارج صلاحياتي دائماً. حوّلت طلبك لموظف الاستقبال مع ملخص حالتك.') : __('هذا الإجراء خارج صلاحياتي الحالية. أرسلته للموظف مع ملخص الحالة.'), ok)) return false;
+    if (!await c.bot(refund ? c.say('الاسترجاع الكامل خارج صلاحياتي دائماً. حوّلت طلبك لموظف الاستقبال مع ملخص حالتك.') : c.say('هذا الإجراء خارج صلاحياتي الحالية. أرسلته للموظف مع ملخص الحالة.'), ok)) return false;
     if (c.buf && !await release(c, ok)) return false;      // the guest must read this now, not after the staff member has answered
     const yes = await approval(approvalText(call, d, c.b));
     c.hint(''); return ok() ? yes : false;
@@ -999,46 +1057,47 @@
   async function saidNo(call, d, ok, c = STAGE) {             // a staff member declined
     const t = call.tool;
     if (t === 'reissue_key' || (t === 'move_room' && stageOf(c.b, c) === 'readiness')) return;      // the brain's next step says it
-    await c.bot(t === 'request_staff_approval' ? __('لم يوافق الموظف على الاسترجاع الكامل.') : t === 'open_ticket' ? __('أبلغت الموظف وسيتابع معك.')
-      : t === 'move_room' ? __('تعذّر النقل الآن. فريق الصيانة في الطريق إليك.') : __('لم يوافق الموظف على هذا الطلب.'), ok);
+    await c.bot(t === 'request_staff_approval' ? c.say('لم يوافق الموظف على الاسترجاع الكامل.') : t === 'open_ticket' ? c.say('أبلغت الموظف وسيتابع معك.')
+      : t === 'move_room' ? c.say('تعذّر النقل الآن. فريق الصيانة في الطريق إليك.') : c.say('لم يوافق الموظف على هذا الطلب.'), ok);
   }
   async function refuse(call, d, ok, c = STAGE) {             // the code said no: say so plainly, and put the forbidden ones on the hotel's log
     const dc = d.code, t = call.tool, money0 = t === 'compensate' || t === 'request_staff_approval';
     if (d.tier === 'never') log(__('رُفض في الكود: ') + (TOOL_LABEL[t] || WHY.unknown_tool) + (c.b ? __(' · الجناح ') + c.b.room : ''), 'never');
-    const text = dc === 'card_data' ? __('لا أستقبل بيانات البطاقات ولا أحفظها أبداً، وحذفت الرقم من رسالتك. الدفع يتم من لوحة الدفع فقط.')
-      : dc === 'other_room' || dc === 'other_booking' ? __('لا أفتح غرفة ولا أصدر مفتاحها ولا أعرض حجزها إلا لصاحب الحجز نفسه. هذا ممنوع دائماً.')
-      : dc === 'other_category' ? __('النقل يكون لغرفة من نفس الفئة وبنفس السعر فقط.')
-      : dc === 'price' ? __('لا أغيّر الأسعار ولا المبالغ، ولا أتجاوز الدفع. السعر يحسبه نظام الفندق.')
-      : dc === 'no_booking' ? __('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.')
-      : dc === 'not_paid' ? (money0 ? __('لم يُدفع مبلغ بعد، فلا يوجد ما أعيده.') : __('لا أصدر المفتاح قبل إتمام الدفع.'))
-      : dc === 'room_not_ready' ? __('لا أصدر المفتاح قبل جاهزية الجناح.')
-      : dc === 'has_key' ? __('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.')
-      : dc === 'no_key' ? __('لم يصدر مفتاحك بعد. نكمل الوصول أولاً.')
-      : dc === 'not_arrived' ? __('نسجّل وصولك أولاً، ثم أصدر المفتاح.')
-      : dc === 'already' ? __('نُفّذ هذا لك من قبل.')
-      : dc === 'target_unavailable' ? __('لا يوجد جناح بديل جاهز من نفس الفئة الآن.')
-      : dc === 'refunded' ? __('استُرجع مبلغ هذا الحجز، فلا أنفّذ عليه إجراءات جديدة.')
-      : dc === 'no_contact' ? __('لا يوجد على الحجز رقم جوال أو بريد لهذه الطريقة. بطاقة من الاستقبال متاحة لك.')
-      : __('هذا خارج ما أستطيع تنفيذه. حوّل طلبك لموظف الاستقبال إن أردت.');
+    const text = dc === 'card_data' ? c.say('لا أستقبل بيانات البطاقات ولا أحفظها أبداً، وحذفت الرقم من رسالتك. الدفع يتم من لوحة الدفع فقط.')
+      : dc === 'other_room' || dc === 'other_booking' ? c.say('لا أفتح غرفة ولا أصدر مفتاحها ولا أعرض حجزها إلا لصاحب الحجز نفسه. هذا ممنوع دائماً.')
+      : dc === 'other_category' ? c.say('النقل يكون لغرفة من نفس الفئة وبنفس السعر فقط.')
+      : dc === 'price' ? c.say('لا أغيّر الأسعار ولا المبالغ، ولا أتجاوز الدفع. السعر يحسبه نظام الفندق.')
+      : dc === 'no_booking' ? c.say('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.')
+      : dc === 'not_paid' ? (money0 ? c.say('لم يُدفع مبلغ بعد، فلا يوجد ما أعيده.') : c.say('لا أصدر المفتاح قبل إتمام الدفع.'))
+      : dc === 'room_not_ready' ? c.say('لا أصدر المفتاح قبل جاهزية الجناح.')
+      : dc === 'has_key' ? c.say('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.')
+      : dc === 'no_key' ? c.say('لم يصدر مفتاحك بعد. نكمل الوصول أولاً.')
+      : dc === 'not_arrived' ? c.say('نسجّل وصولك أولاً، ثم أصدر المفتاح.')
+      : dc === 'already' ? c.say('نُفّذ هذا لك من قبل.')
+      : dc === 'target_unavailable' ? c.say('لا يوجد جناح بديل جاهز من نفس الفئة الآن.')
+      : dc === 'refunded' ? c.say('استُرجع مبلغ هذا الحجز، فلا أنفّذ عليه إجراءات جديدة.')
+      : dc === 'no_contact' ? c.say('لا يوجد على الحجز رقم جوال أو بريد لهذه الطريقة. بطاقة من الاستقبال متاحة لك.')
+      : c.say('هذا خارج ما أستطيع تنفيذه. حوّل طلبك لموظف الاستقبال إن أردت.');
     await c.bot(text, ok);
   }
   /* ---------- a call a model proposed waits for the guest's yes ---------- */
-  const viaText = v => (v === 'card' ? __('بطاقة من الاستقبال') : v === 'email' ? __('رمز بالبريد') : __('رمز برسالة SMS'));
-  const confirmWhat = list => list.map(k => {
+  const viaText = (v, say = __) => (v === 'card' ? say('بطاقة من الاستقبال') : v === 'email' ? say('رمز بالبريد') : say('رمز برسالة SMS'));
+  const confirmWhat = (list, say = __) => list.map(k => {
     const a = k.args || {};
-    return k.tool === 'move_room' ? fill(__('النقل إلى الجناح {to} من نفس الفئة وبنفس السعر'), { to: a.to })
-      : k.tool === 'late_checkout' ? __('تأخير مغادرتك ساعة إلى 1:00 ظهراً')
-      : k.tool === 'compensate' ? __('تسجيل طلب تعويض يحسب نظام الفندق مبلغه')
-      : k.tool === 'reissue_key' ? (a.via === 'card' ? __('تبديل مفتاحك ببطاقة من الاستقبال') : __('إلغاء رمز الدخول الحالي وإصدار رمز جديد'))
-      : fill(__('إصدار مفتاح جناحك ({via})'), { via: viaText(a.via) });
-  }).join(__(' و', 'and'));
-  const confirmText = list => fill(__('قبل أن أنفّذ: هل تريد {what}؟ اكتب «نعم» للتأكيد أو «لا» للإلغاء.'), { what: confirmWhat(list) });
+    return k.tool === 'move_room' ? fill(say('النقل إلى الجناح {to} من نفس الفئة وبنفس السعر'), { to: a.to })
+      : k.tool === 'late_checkout' ? say('تأخير مغادرتك ساعة إلى 1:00 ظهراً')
+      : k.tool === 'compensate' ? say('تسجيل طلب تعويض يحسب نظام الفندق مبلغه')
+      : k.tool === 'reissue_key' ? (a.via === 'card' ? say('تبديل مفتاحك ببطاقة من الاستقبال') : say('إلغاء رمز الدخول الحالي وإصدار رمز جديد'))
+      : fill(say('إصدار مفتاح جناحك ({via})'), { via: viaText(a.via, say) });
+  }).join(say(' و', 'and'));
+  const confirmText = (list, say = __) => fill(say('قبل أن أنفّذ: هل تريد {what}؟ اكتب «نعم» للتأكيد أو «لا» للإلغاء.'), { what: confirmWhat(list, say) });
   /* the end of a turn: what the turn kept for confirmation replaces whatever was kept before, and the guest is asked once */
-  const broke = (call, ok, c = STAGE) => c.bot(fill(__('تعذّر تنفيذ «{what}» الآن بسبب خلل عندنا، ولم يتغيّر شيء. موظف الاستقبال يستطيع مساعدتك فيه.'), { what: TOOL_LABEL[call.tool] || call.tool }), ok);
+  const broke = (call, ok, c = STAGE) => c.bot(fill(c.say('تعذّر تنفيذ «{what}» الآن بسبب خلل عندنا، ولم يتغيّر شيء. موظف الاستقبال يستطيع مساعدتك فيه.'), { what: c.own(TOOL_LABEL[call.tool]) || call.tool }), ok);
   async function closeTurn(c, kept, ok, resumed) {
     if (resumed && !kept.length) return;            // the guest only identified again: what was waiting for them still is
+    lapseHeld(c.session.confirm);
     c.session.confirm = kept.length ? kept : null;
-    if (kept.length && ok()) await c.bot(confirmText(kept), ok);
+    if (kept.length && ok()) await c.bot(confirmText(kept, c.say), ok);
   }
   /* what a message can ask for, as the guest would name it: used when the rules brain says which parts it left */
   const PART = {
@@ -1049,26 +1108,29 @@
     const b = c.b;
     switch (code) {
       case 'info': {                                // answered from the hotel's own data, by the rules: nothing is guessed
-        const t = text === 'checkout' ? POLICIES[0] : text === 'tax' ? POLICIES[1] : text === 'refunds' ? POLICIES[5]
-          : text === 'landmarks' ? __('من المعالم في بيانات الفندق: ') + LANDMARKS.map(c => c[2][0][0] + ' (' + c[0] + ')').join(__('، ')) + __('. التفاصيل في صفحة المعالم.')
-          : __('ليس في بيانات الفندق قائمة بالمطاعم القريبة، ولا أخمّن. خدمة الغرف متاحة لك، وإن أردت توصية فاكتب طلبك وأحوّله للكونسيرج.');
+        const t = text === 'checkout' ? c.own(POLICIES[0]) : text === 'tax' ? c.own(POLICIES[1]) : text === 'refunds' ? c.own(POLICIES[5])
+          : text === 'landmarks' ? c.say('من المعالم في بيانات الفندق: ') + LANDMARKS.map(m => c.own(m[2][0][0]) + ' (' + c.own(m[0]) + ')').join(c.say('، ')) + c.say('. التفاصيل في صفحة المعالم.')
+          : c.say('ليس في بيانات الفندق قائمة بالمطاعم القريبة، ولا أخمّن. خدمة الغرف متاحة لك، وإن أردت توصية فاكتب طلبك وأحوّله للكونسيرج.');
         return c.bot(t, ok);
       }
-      case 'clarify': return c.bot(fill(__('في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟'), { what: PART[text] || '' }), ok);
-      case 'unhandled': return c.bot(fill(__('نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.'), { what: String(text || '').split(',').map(p => PART[p]).filter(Boolean).join(__('، ')) }), ok);
-      case 'confirm_no': return c.bot(__('تمام، لم أنفّذ شيئاً.'), ok);
+      case 'clarify':
+        if (text === 'vague') return c.bot(c.say('ما المطلوب بالضبط؟ اكتب ما الذي تريد إصلاحه أو تنفيذه، مثل: المكيف لا يبرّد، أو أحتاج مناشف.'), ok);      // "fix it", with nothing it could point to
+        return c.bot(fill(c.say('في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟'), { what: c.own(PART[text]) || '' }), ok);
+      case 'followup': return c.bot(fill(c.say('طلبك السابق ({what}) مسجّل عندنا ويُتابَع، ولم أفتح طلباً جديداً. إن كان عندك شيء آخر فاكتب ما هو.'), { what: c.own(PART[text]) || c.say('طلبك') }), ok);
+      case 'unhandled': return c.bot(fill(c.say('نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.'), { what: String(text || '').split(',').map(p => c.own(PART[p])).filter(Boolean).join(c.say('، ')) }), ok);
+      case 'confirm_no': return c.bot(c.say('تمام، لم أنفّذ شيئاً.'), ok);
       case 'free': return text ? c.bot(redact(text), ok) : true;      // a model's own words: only ever an answer, never an action
-      case 'ask_requests': return c.bot(__('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok);
-      case 'no_requests': c.session.reqDone = true; return c.bot(__('لا توجد طلبات الآن. يمكنك طلب أي شيء لاحقاً.'), ok);
-      case 'will_notify': c.session.waiting = true; return c.bot(__('سأبلغك فور جاهزيته، ولن تحتاج لمراجعة الاستقبال.'), ok);
-      case 'move_failed': c.session.waiting = true; return c.bot(__('تعذّر النقل. سأنتظر معك جاهزية جناحك.'), ok);
-      case 'room_ready': c.session.waiting = false; return c.bot(__('جناحك ') + b.room + __(' صار جاهزاً.'), ok);
-      case 'ask_key': return c.bot(__('كيف تفضّل استلام مفتاحك؟ رمز دخول إلكتروني، أو بطاقة عادية من الاستقبال.'), ok);
-      case 'welcome_back': return c.bot(__('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.'), ok);
-      case 'offer_move': { const alt = altFor(b); if (!alt) return true; c.session.offer = true; return c.bot(__('إن لم ترغب بالانتظار، أنقلك الآن إلى الجناح ') + alt.no + __(' من نفس الفئة وبنفس السعر.'), ok); }
-      case 'wait_maint': return c.bot(__('تمام. فريق الصيانة في الطريق إليك.'), ok);
-      case 'no_alt': return c.bot(__('لا يوجد جناح بديل جاهز من نفس الفئة الآن.'), ok);
-      case 'need_id': return c.bot(__('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.'), ok);
+      case 'ask_requests': return c.bot(c.say('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok);
+      case 'no_requests': c.session.reqDone = true; return c.bot(c.say('لا توجد طلبات الآن. يمكنك طلب أي شيء لاحقاً.'), ok);
+      case 'will_notify': c.session.waiting = true; return c.bot(c.say('سأبلغك فور جاهزيته، ولن تحتاج لمراجعة الاستقبال.'), ok);
+      case 'move_failed': c.session.waiting = true; return c.bot(c.say('تعذّر النقل. سأنتظر معك جاهزية جناحك.'), ok);
+      case 'room_ready': c.session.waiting = false; return c.bot(c.say('جناحك ') + b.room + c.say(' صار جاهزاً.'), ok);
+      case 'ask_key': return c.bot(c.say('كيف تفضّل استلام مفتاحك؟ رمز دخول إلكتروني، أو بطاقة عادية من الاستقبال.'), ok);
+      case 'welcome_back': return c.bot(c.say('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.'), ok);
+      case 'offer_move': { const alt = altFor(b); if (!alt) return true; c.session.offer = true; return c.bot(c.say('إن لم ترغب بالانتظار، أنقلك الآن إلى الجناح ') + alt.no + c.say(' من نفس الفئة وبنفس السعر.'), ok); }
+      case 'wait_maint': return c.bot(c.say('تمام. فريق الصيانة في الطريق إليك.'), ok);
+      case 'no_alt': return c.bot(c.say('لا يوجد جناح بديل جاهز من نفس الفئة الآن.'), ok);
+      case 'need_id': return c.bot(c.say('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.'), ok);
     }
     return true;
   }
@@ -1084,7 +1146,9 @@
     if (input.type === 'text') {
       /* the rules brain matches the guest's own words in this browser; what is shown, logged, remembered or sent to a model is the redacted copy */
       input.text = String(input.text).slice(0, 300); input.shown = redact(input.text);
-      push(el('div', 'm guest', input.shown));
+      STAGE.tongue = RULES.langOf(input.text, STAGE.tongue || lang);
+      if (STAGE.tongue === 'en') await needEnglish();
+      { const g = push(el('div', 'm guest', input.shown)); g.dir = 'auto'; }
       if (cur) { if (stageOf(cur) === 'stay') setPhase('fix'); setPanel(busyPanel(__('يراجع المساعد بيانات حجزك…'))); hint(''); }
     }
     const tr = trailStart(input), who0 = cur;
@@ -1096,14 +1160,14 @@
     STAGE.buf = brain === RULES ? null : [];
     try {
       out = await AG.agent.turn({
-        input, lang, brain, fallback: RULES,
+        input, lang: STAGE.tongue || lang, brain, fallback: RULES,
         snapshot, facts: () => factsFor(cur), history: () => historyOf(cur), alive: ok,
         run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok),
         approve: (call, d) => askStaff(call, d, ok),
         declined: (call, d) => saidNo(call, d, ok),
         refuse: (call, d) => refuse(call, d, ok),
         failed: call => broke(call, ok),
-        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args }); },
+        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args, hold: tr.lastHold }); },
         speak: (code, state, text) => speak(code, state, ok, text),
         record: e => { if (offer0) { offer0 = false; session.offer = false; } trailAdd(tr, e); },
         onFallback: e => { if (!e || !e.soft) modelDown(); }
@@ -1118,7 +1182,7 @@
 
   /* ---------- the guest journey: the screen shows what the booking needs next, and every answer goes through the agent ---------- */
   function clearStage() {
-    entry = ''; roomShown = ''; cur = null; resetSession(); askResolve = null; turning = false; asking(true); setPhase('idle'); renderId();
+    entry = ''; roomShown = ''; cur = null; STAGE.tongue = null; resetSession(); askResolve = null; turning = false; asking(true); setPhase('idle'); renderId();
     panelEl.classList.remove('auto'); setPanel(keypadEl);
     feed.textContent = ''; push(el('div', 'm bot', __('مرحباً بك. أدخل رقم هويتك أو رقم جوالك لأبدأ تسجيل وصولك.')));
     hint(MODES[mode].hint);
@@ -1386,7 +1450,7 @@
   $('#ctaTry').addEventListener('click', () => { takeOver(); toStage(); });
   $('#navCta').addEventListener('click', () => { if (system === 'events') { $('#evStage').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); $('#evBrief').focus({ preventScroll: true }); } else { takeOver(); toStage(); } });
   $('#exportLog').addEventListener('click', () => {
-    const data = { exportedAt: new Date().toISOString(), language: lang, note: __('بيانات تجريبية من محاكاة صلة'), log: store.log, trail: store.trail, approvalsWaiting: store.approvals, tickets: store.tickets, sync: SYNC ? SYNC.state().log : [] };
+    const data = { exportedAt: new Date().toISOString(), language: lang, note: __('بيانات تجريبية من محاكاة صلة'), log: store.log, trail: store.trail.map(e => Object.assign({}, e, { state: stateOf(e) })), approvalsWaiting: store.approvals, tickets: store.tickets, sync: SYNC ? SYNC.state().log : [] };
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), link = el('a');
     link.href = url; link.download = 'sila-log-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -1999,10 +2063,10 @@
   }
   const baseChips = () => me() ? [__('اطلب تنظيف الغرفة'), __('بلاغ صيانة'), __('حجزي'), __('أبغى أحجز قاعة')] : [__('سجّلني كنزيل جديد'), __('دخول برقم الهوية'), __('أبغى أحجز قاعة'), __('كم أسعار الليلة؟')];
   const reply = (text, list) => { helpSay('bot', text); chips(list || baseChips()); };
-  const bookingLine = b => {
+  const bookingLine = (b, say = __, own = same, en = EN) => {
     const r = roomOf(b), t = bill(b);
-    return (r ? r.cat + ' ' : __('الغرفة ')) + b.room + (r ? ' (' + STATE[r.state] + ')' : '') + __('، ') + nightsText(b.nights) + __('، ') + (b.arrivedAt ? __('وصلت ') + b.arrivedAt : __('الوصول المتوقع ') + b.eta)
-      + __('، ') + (b.refunded ? __('استُرجع المبلغ') : b.paid ? __('مدفوع') : __('لم يُدفع بعد')).toLowerCase() + (b.key ? __('، المفتاح: ') + (b.key === 'code' ? __('رمز دخول') : __('بطاقة')) : '') + __('، الإجمالي ') + money(t.total) + '.';
+    return (r ? own(r.cat) + ' ' : say('الغرفة ')) + b.room + (r ? ' (' + own(STATE[r.state]) + ')' : '') + say('، ') + nightsText(b.nights, en) + say('، ') + (b.arrivedAt ? say('وصلت ') + b.arrivedAt : say('الوصول المتوقع ') + b.eta)
+      + say('، ') + (b.refunded ? say('استُرجع المبلغ') : b.paid ? say('مدفوع') : say('لم يُدفع بعد')).toLowerCase() + (b.key ? say('، المفتاح: ') + (b.key === 'code' ? say('رمز دخول') : say('بطاقة')) : '') + say('، الإجمالي ') + money(t.total) + '.';
   };
   const freeOf = key => S.rooms.filter(r => r.cat === key && !occupant(r.no)).sort((a, b) => (a.state === 'ready' ? 0 : 1) - (b.state === 'ready' ? 0 : 1));
   const typeChips = () => CATS.filter(c => freeOf(c.key).length).map(c => c.key + ' · ' + rateNow(freeOf(c.key)[0]) + __(' ر.س'));
@@ -2072,15 +2136,41 @@
     if (step === 'confirm') return ASKING.test(q) && !/تأكيد|confirm/i.test(q);
     return GREETING.test(q) || ASKING.test(q);
   }
-  async function regAnswer(raw, q) {
-    let text = '';
-    if (modelChat()) {
-      try {
-        const act = await chatBrain.next({ input: { type: 'text', text: raw.slice(0, 300), shown: redact(raw.slice(0, 300)), at: 'identify' }, state: snapshot(CHATC), steps: [], lang,
-          history: chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })) });
-        if (act && act.say === 'free' && act.text) text = redact(String(act.text)).slice(0, 600);
-      } catch (e) { modelDown(); }
+  /* what a model answers to an aside, from the hotel's data; '' when there is no model or its words were thrown away */
+  async function asideText(raw) {
+    if (!modelChat()) return '';
+    try {
+      const act = await chatBrain.next({ input: { type: 'text', text: raw.slice(0, 300), shown: redact(raw.slice(0, 300)), at: 'identify' }, state: snapshot(CHATC), steps: [], lang: RULES.langOf(raw, CHATC.tongue || lang),
+        history: chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })) });
+      return act && act.say === 'free' && act.text ? redact(String(act.text)).slice(0, 600) : '';
+    } catch (e) { modelDown(); return ''; }
+  }
+  /* the hall and tour conversations take an aside the same way: a greeting or a question is answered, and the step asked again.
+     With no model, a question is answered from the hall data: the halls, their size and their full-day rate. */
+  const hallsLine = () => __('قاعاتنا: ') + HALLS.map(h => h.name + ' (' + h.w * h.d + __(' م²، ') + sar(h.rate) + __(' لليوم الكامل') + ')').join(__('، ')) + '.';
+  function flowAside(q, raw) {
+    const f = H.flow, step = f && f.step;
+    if (!f || !step || /^(إلغاء|الغاء|cancel)$/i.test(q)) return false;
+    if (f.name === 'event') {
+      if (step === 'type' && (Object.keys(EV_TYPES).some(k => q.includes(EV_TYPES[k].label)) || briefByRules(raw).type)) return false;
+      if ((step === 'n' || step === 'budget') && (/\d/.test(q) || /تخط|skip/i.test(q))) return false;
+    } else {
+      if (step === 'phone' && /\d/.test(q)) return false;
+      if (step === 'when' && /\d|غد|بكر|اليوم|السبت|الأحد|الاحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|tomorrow|today|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\b(am|pm)\b/i.test(q) && !/[?؟]/.test(q)) return false;      // a time is an answer, even with «صباحاً» in it
     }
+    return GREETING.test(q) || ASKING.test(q);
+  }
+  async function flowAnswer(raw, q) {
+    let text = await asideText(raw);
+    chatClear();
+    if (!H.flow) return;
+    if (!text && GREETING.test(q) && !ASKING.test(q)) text = __('أهلاً بك.');
+    if (!text) text = hallsLine();
+    helpSay('bot', text);
+    if (H.flow.name === 'event') eventNext(); else tourNext();      // the same step again: what was already answered is kept
+  }
+  async function regAnswer(raw, q) {
+    let text = await asideText(raw);
     chatClear();
     if (!text && GREETING.test(q) && !ASKING.test(q)) text = __('أهلاً بك.');
     if (!text && H.flow.data.type && /سعر|بكم|price|rate|cost|how much/i.test(q)) { const r0 = freeOf(H.flow.data.type)[0]; if (r0) text = H.flow.data.type + ': ' + __('سعر الليلة ') + rateNow(r0) + __(' ر.س') + '.'; }
@@ -2207,6 +2297,7 @@
   const chatClear = () => { if (chatWait) { chatWait.remove(); chatWait = null; } };
   const CHATC = {
     stage: false, get b() { return me(); }, set b(v) { H.who = v ? v.id : null; }, session: chatSession, buf: null,
+    tongue: null, get say() { return sayIn(CHATC.tongue || lang); }, get own() { return ownIn(CHATC.tongue || lang); },
     async bot(text, ok, extra) {
       if (CHATC.buf) return keep(CHATC, { t: text, x: extra }, ok);
       chatClear();
@@ -2230,6 +2321,8 @@
   async function chatTurn(raw, firstAct, plain) {
     const c = CHATC, input = { type: 'text', text: String(raw).slice(0, 300) }, ok = () => true;
     input.shown = redact(input.text);
+    c.tongue = RULES.langOf(input.text, c.tongue || lang);
+    if (c.tongue === 'en') await needEnglish();
     const tr = Object.assign(trailStart(input), { src: 'chat', ui: CHATC, who: me() });
     const before = helpFeed.querySelectorAll('.m.bot:not(.typing)').length;
     /* a button that names the job ("clean my room") starts the turn with that tool; what follows is the rules brain's, as on the guest screen */
@@ -2239,15 +2332,15 @@
     c.buf = brain === chatBrain ? [] : null;
     try {
       out = await AG.agent.turn({
-        input, lang, brain, fallback: RULES,
+        input, lang: c.tongue || lang, brain, fallback: RULES,
         snapshot: () => snapshot(c), facts: () => factsFor(c.b), alive: ok,
-        history: () => chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })),
+        history: () => chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent), did: t.did })),
         run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok, c),
         approve: (call, d) => askStaff(call, d, ok, c),
         declined: (call, d) => saidNo(call, d, ok, c),
         refuse: (call, d) => refuse(call, d, ok, c),
         failed: call => broke(call, ok, c),
-        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args }); },
+        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args, hold: tr.lastHold }); },
         speak: (code, state, text) => (code === 'flow' ? startFlow(text, raw) : speak(code, state, ok, text, c)),
         record: e => { if (offer0) { offer0 = false; chatSession.offer = false; } if (!tr.who) tr.who = me(); trailAdd(tr, e); },
         onFallback: e => { if (!e || !e.soft) modelDown(); }
@@ -2259,6 +2352,7 @@
     if (kept.length) chips([__('نعم'), __('لا')]);
     chatClear();
     const b = me(), last = chatTurns[chatTurns.length - 1];
+    if (last) last.did = didOf(out.steps);          // what this turn carried out, so that a later "fix it" knows whether the matter is still open
     if (b) remember(b, tr, out.steps, last ? last.agent : '');
     if (cur && b && cur === b) stageRefresh();      // the guest screen shows the same booking: let it catch up
     return helpFeed.querySelectorAll('.m.bot:not(.typing)').length > before;
@@ -2280,13 +2374,15 @@
       drop(); H.flow = { name: 'maint', step: 'what', data: {} };
       return reply(__('وش المشكلة بالضبط؟ مثلاً: المكيف لا يبرّد.'), [__('المكيف لا يعمل'), __('تسريب ماء'), __('الإنارة معطّلة'), __('إلغاء')]);
     }
-    if (!b && it.intent !== 'prices' && !modelChat()) { drop(); reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
+    /* a question about tonight's rates or the guest's own bill, in any wording the rules read, is answered by the code alone */
+    const money = it.intent === 'prices' || (it.intent === 'other' && RULES.local(raw, snapshot(CHATC), 'stay') && ['rates', 'bill'].includes(RULES.intentOf(raw, snapshot(CHATC), 'stay').intent));
+    if (!b && !money && !modelChat()) { drop(); reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
     chatWait = wait;
     const brief = it.q.split(/\s+/).length <= 3;
     const act = !brief ? null : it.intent === 'clean' ? { tool: 'open_ticket', args: { kind: 'clean' }, intent: 'clean' }
       : it.intent === 'maint' ? { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw.trim())) }, intent: 'maint' } : null;
     /* "my booking" and "tonight's rates" are matched by the written rules: instant, and no model quota spent on them */
-    if (!await chatTurn(raw, act, it.intent === 'mine' || it.intent === 'prices')) { reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
+    if (!await chatTurn(raw, act, it.intent === 'mine' || money)) { reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
   }
   let helping = false;
   async function helpAsk(raw) {
@@ -2305,8 +2401,10 @@
       } else if (H.flow) {
         if (H.flow.name === 'maint') { H.flow = null; chatWait = wait; await chatTurn(raw, { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw)) }, intent: 'maint' }); }
         else {
-          if (!(H.flow.name === 'reg' && regAside(it.q))) wait.remove();
-          if (H.flow.name === 'reg') { if (regAside(it.q)) { chatWait = wait; await regAnswer(raw, it.q); } else regInput(raw, it.q); }
+          const aside = H.flow.name === 'reg' ? regAside(it.q) : flowAside(it.q, raw);      // a greeting or a question, not an answer to the step
+          if (!aside) wait.remove(); else chatWait = wait;
+          if (aside) await (H.flow.name === 'reg' ? regAnswer : flowAnswer)(raw, it.q);
+          else if (H.flow.name === 'reg') regInput(raw, it.q);
           else if (H.flow.name === 'event') await eventInput(raw, it.q);
           else if (H.flow.name === 'tour') tourInput(raw, it.q);
         }

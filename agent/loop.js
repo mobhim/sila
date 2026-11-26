@@ -32,7 +32,7 @@
       catch (e) {
         if (!o.fallback || brain === o.fallback) throw e;
         brain = o.fallback; if (o.onFallback) o.onFallback(e);            // the guest sees no break: the same turn carries on with the rules
-        act = await brain.next({ input, state, steps, lang: o.lang, history: [] });
+        act = await brain.next({ input, state, steps, lang: o.lang, history: o.history ? o.history() : [] });
       }
       if (!o.alive()) return { steps, stopped: true };
       if (!act || act.done) break;

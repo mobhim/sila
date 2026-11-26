@@ -1,4 +1,4 @@
-/* Lists Arabic strings that have no English entry in i18n.en.js: every __('…') in app.js, and the static Arabic text,
+/* Lists Arabic strings that have no English entry in i18n.en.js: every __('…') and say('…') in app.js, and the static Arabic text,
    placeholders and labels of the pages that are translated through the dictionary.   node tests/i18n-missing.mjs */
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -11,7 +11,7 @@ const need = (s, ctx) => { if (AR.test(s) && dict[ctx ? s + '|' + ctx : s] == nu
 const unescape = s => s.replace(/\\n/g, '\n').replace(/\\(['"\\])/g, '$1');
 
 const js = readFileSync('app.js', 'utf8');
-for (const m of js.matchAll(/__\('((?:[^'\\]|\\.)*)'(?:,\s*'(\w+)')?\)/g)) need(unescape(m[1]), m[2]);
+for (const m of js.matchAll(/(?:__|say)\('((?:[^'\\]|\\.)*)'(?:,\s*'(\w+)')?\)/g)) need(unescape(m[1]), m[2]);
 
 for (const file of ['index.html', 'admin.html', 'landmarks.html']) {
   const html = readFileSync(file, 'utf8').replace(/<script[\s\S]*?<\/script>/g, '').replace(/<!--[\s\S]*?-->/g, '');

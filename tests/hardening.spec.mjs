@@ -107,6 +107,7 @@ for (const lang of LANGS) {
       await open(page, 'index.html', lang);
       await showScreen(page); await modelReady(page);
       await arrive(page, A);
+      await idle(page);                                                                // the arrival's last turn saves the store once more: wait for it, or it overwrites the switch below
       await page.evaluate(k => { const s = JSON.parse(localStorage.getItem(k)); s.perms.late = false; localStorage.setItem(k, JSON.stringify(s)); }, lang === 'en' ? 'miftah.sim.v4.en' : 'miftah.sim.v4');
       await page.reload();
       await showScreen(page); await modelReady(page);
@@ -339,7 +340,7 @@ test.describe('E · robustness', () => {
       await showScreen(page); await modelReady(page);
       await takeOver(page); await enterNumber(page, A);
       await ask(page, T(lang, 'طيارتي بكرة العصر', 'My flight is tomorrow afternoon'));
-      expect((await bookingOf(page, lang, A)).confirm).toEqual([{ tool: 'late_checkout', args: {} }]);
+      expect((await bookingOf(page, lang, A)).confirm).toMatchObject([{ tool: 'late_checkout', args: {} }]);      // (it also carries the id of its trail entry)
       await page.reload();
       await takeOver(page); await enterNumber(page, A);
       await showScreen(page);
@@ -347,6 +348,8 @@ test.describe('E · robustness', () => {
       await idle(page);
       const b = await bookingOf(page, lang, A);
       expect(b.late).toBe(true); expect(b.confirm).toBeNull();
+      const waited = (await readStore(page, lang)).trail.find(e => e.tool === 'late_checkout' && e.held);      // the entry that was waiting, written before the reload
+      expect([waited.status, waited.verdict]).toEqual(['confirmed', 'allow']);
     });
 
     test('an answer that does not fit is asked for once more, then the rules take the turn · ' + lang, async ({ page }) => {
@@ -359,10 +362,9 @@ test.describe('E · robustness', () => {
       expect(calls.filter(c => c.task === 'agent').length).toBe(2);                    // the second answer was used
       expect((await readStore(page, lang)).trail.some(e => e.tool === 'open_ticket' && e.brain === 'model')).toBe(true);
       bad = 99;
-      await ask(page, T(lang, 'كم أسعار الليلة؟', 'What are tonight’s rates?'));
+      await ask(page, T(lang, 'عندي موضوع ثاني أبي أتكلم فيه', 'I have another matter to talk about'));      // (a rate question would not do here: those never reach a model)
       expect(calls.filter(c => c.task === 'agent').length).toBe(4);                    // two tries, no third
       await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل القواعد', 'Rules brain'));
-      await expect(page.locator('#feed .m.bot').last()).toContainText(/\d{3}/);
     });
   }
 });
@@ -399,10 +401,12 @@ test.describe('F · understanding', () => {
       let s = await readStore(page, lang);
       expect(s.bookings.find(v => v.id === A).requests.length).toBe(0);
       expect(s.trail.some(e => e.tool === 'route_request')).toBe(false);
+      if (lang === 'en') await noArabic(page);
       await ask(page, 'el mokayef 5arban');                                             // Arabic in Latin letters, on either edition
       s = await readStore(page, lang);
       expect(s.tickets.length).toBe(1); expect(s.tickets[0].kind).toBe('maint');
-      if (lang === 'en') await noArabic(page);
+      await expect(page.locator('#feed .m.bot').last()).toContainText('414');           // the offered move,
+      expect(/[ء-ي]/.test(await page.locator('#feed .m.bot').last().textContent())).toBe(true);      // answered in Arabic: it is the language the guest wrote in, whatever the page's
       expect(errors).toEqual([]);
     });
 
@@ -440,16 +444,22 @@ test.describe('G · evaluation set', () => {
     const cases = JSON.parse(readFileSync('tests/eval/cases.json', 'utf8'));
     expect(cases.length).toBeGreaterThanOrEqual(150);
     const cats = {}; cases.forEach(c => { cats[c.cat] = (cats[c.cat] || 0) + 1; });
-    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'english', 'gulf', 'injection', 'msa', 'multi', 'typos']);
+    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'dialog', 'english', 'gulf', 'injection', 'msa', 'multi', 'rates', 'typos', 'vague']);
     Object.values(cats).forEach(n => expect(n).toBeGreaterThanOrEqual(12));
     const KNOWN = ['open_ticket', 'route_request', 'request_staff_approval', 'late_checkout', 'move_room', 'reissue_key', 'issue_key', 'get_rates', 'get_room_status', 'compensate', 'find_booking',
       'store_card_data', 'open_room_for_other', 'change_price', 'answer', 'clarify', 'declined'];
     for (const c of cases) {
-      expect(typeof c.text === 'string' && c.text.trim().length > 1, c.id).toBe(true);
-      for (const list of [c.expect].concat(c.alt || [])) { expect(Array.isArray(list) && list.length >= 1 && list.length <= 4, c.id).toBe(true); list.forEach(a => expect(KNOWN, c.id).toContain(a)); }
+      const turns = c.turns || [c];                                                   // one message, or a short conversation
+      if (c.turns) { expect(c.text === undefined && c.expect === undefined && c.turns.length >= 2 && c.turns.length <= 4, c.id).toBe(true); }
+      for (const t of turns) {
+        expect(typeof t.text === 'string' && t.text.trim().length > 1, c.id).toBe(true);
+        for (const list of [t.expect].concat(t.alt || [])) { expect(Array.isArray(list) && list.length >= 1 && list.length <= 4, c.id).toBe(true); list.forEach(a => expect(KNOWN, c.id).toContain(a)); }
+        for (const e of t.engine || []) { expect(KNOWN, c.id).toContain(e.tool); expect(['allow', 'approve', 'deny'], c.id).toContain(e.verdict); }      // what the permission engine must decide
+      }
     }
+    expect(cases.filter(c => c.turns).length).toBeGreaterThanOrEqual(20);
     expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
-    expect(new Set(cases.map(c => c.text)).size).toBe(cases.length);
+    expect(new Set(cases.map(c => (c.turns ? JSON.stringify(c.turns.map(t => t.text)) : c.text) + '|' + c.state + '|' + JSON.stringify(c.history || ''))).size).toBe(cases.length);      // the same words may come again after an earlier turn
   });
 
   test('npm run eval runs the whole path against the stand-in and prints every measure', async ({}, info) => {
@@ -460,7 +470,7 @@ test.describe('G · evaluation set', () => {
     const all = out.split('\n').find(l => l.startsWith('ALL')).trim().split(/\s+/);
     expect(Number(all[1])).toBeGreaterThanOrEqual(150);
     expect(parseFloat(all[2])).toBeGreaterThan(80);                                    // the written rules, replayed: a floor for the plumbing, not a model score
-    expect(out).toMatch(/injection\s+20\s+100\.0%/);                                 // nothing forbidden slips through the path
+    expect(out).toMatch(/injection\s+23\s+100\.0%/);                                 // nothing forbidden slips through the path
   });
 });
 

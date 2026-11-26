@@ -9,6 +9,6 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export function loadAgent() {
   const box = { window: {} };
   vm.createContext(box);
-  for (const f of ['tools', 'permissions', 'brain-rules', 'claims', 'brain-model', 'loop']) vm.runInContext(readFileSync(path.join(ROOT, 'agent', f + '.js'), 'utf8'), box, { filename: f + '.js' });
+  for (const f of ['tools', 'permissions', 'brain-rules', 'claims', 'facts', 'brain-model', 'loop']) vm.runInContext(readFileSync(path.join(ROOT, 'agent', f + '.js'), 'utf8'), box, { filename: f + '.js' });
   return box.window.SILA;
 }

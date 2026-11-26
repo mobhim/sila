@@ -153,9 +153,9 @@
     var q = new URLSearchParams(location.search).get('lang'), l = q;
     try { if (q !== 'ar' && q !== 'en') l = localStorage.getItem('sila.lang'); } catch (e) {}
     if (l !== 'ar' && l !== 'en') l = /^ar\b/i.test(navigator.language || '') ? 'ar' : 'en';
-    if (l === 'en') document.write('<script src="i18n.en.js?v=13"><\/script>');
+    if (l === 'en') document.write('<script src="i18n.en.js?v=14"><\/script>');
   })();
 </script>
-<script src="app.min.js?v=21"></script>
+<script src="app.min.js?v=22"></script>
 </body>
 </html>

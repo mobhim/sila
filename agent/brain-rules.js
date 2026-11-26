@@ -37,7 +37,10 @@
     [/\b(a(5|kh)[eia]?ro?(oli| li)?)\b/gi, 'أخروا لي'],
     [/\b(ta2?(5|kh)[ei]+r)\b/gi, 'تأخير'],
     [/\b(el[ -]?|al[ -]?)?m[ou](gh|8)ad[a]?ra\b/gi, 'المغادرة'],
-    [/\b(se3r|as3ar|b[ei]?kam)\b/gi, 'سعر'],
+    [/\b(el[ -]?|al[ -]?)?(se3e?r|s3r|as3ar)\b/gi, 'سعر'], [/\bb[ei]?[ -]?kam\b/gi, 'بكم'], [/\b(kam|km)\b/gi, 'كم'],
+    [/\b(el[ -]?|al[ -]?)?(l[aei]+[iy]?l[ae]h?|lela|lailah?)\b/gi, 'الليلة'], [/\b(el[ -]?|al[ -]?)?(fat[ou]+r(a|ah|ti|ty|at[iy])?)\b/gi, 'فاتورتي'],
+    [/\b(el[ -]?|al[ -]?)?(7[ei]?sab[iy]?|hesab[iy]?)\b/gi, 'حسابي'], [/\b(el[ -]?|al[ -]?)?([ei][jg]mal[iy]|majmoo?3)\b/gi, 'الإجمالي'], [/\b(3alay+[ae]?|3ala[iy])\b/gi, 'علي'],
+    [/\b(t[ae]kl[ei]fa|t[ae]kalif|y[ei]?kal+[ei]f|t[ei]?kal+[ei]f)\b/gi, 'يكلف'], [/\b(adfa3|adf3)\b/gi, 'أدفع'],
     [/\b(ta3w[ei]+[dz]|3aw+[ae]?[dz](ni|oni|ooni))\b/gi, 'تعويض'],
     [/\b(sar[ei]+r)\b/gi, 'سرير'], [/\b(m[ei]khad+a|w[ei]sada)\b/gi, 'وسادة'], [/\b(may+a|mo[iy]+a)\b/gi, 'ماء'],
     [/\b(say+ara)\b/gi, 'سيارة'], [/\b(ma[t6]ar)\b/gi, 'مطار'], [/\b(ma[t6]3am|mata3em)\b/gi, 'مطعم'],
@@ -46,6 +49,15 @@
   const norm = s => {
     let t = latin(s).replace(/(?<=[\u0621-\u064A]{3})ه(?![\u0621-\u064A])/g, 'ة');      // «الغرفه» is «الغرفة»
     if (/[a-z]/i.test(t)) for (const [re, word] of ARABIZI) t = t.replace(re, ' ' + word + ' '); return t.replace(/\s+/g, ' '); };
+
+  /* the language a guest wrote in: Arabic letters, or Arabic typed in Latin letters, is Arabic; other Latin text is English;
+     a bare number or a button says nothing, and the language before it stays */
+  const langOf = (text, before) => {
+    const t = String(text == null ? '' : text);
+    if (/[ء-ي]/.test(t)) return 'ar';
+    if (!/[a-z]{2}/i.test(t)) return before || 'ar';
+    return /\b[a-z]*[2357][a-z]+\b|\b[a-z]+[2357][a-z]*\b/i.test(t) || /[ء-ي]/.test(norm(t)) ? 'ar' : 'en';
+  };
 
   /* ---------- the written rules the prototype already had: requests to departments, and the kind of a problem ---------- */
   const REQ_RULES = [
@@ -78,8 +90,10 @@
     comp: /تعويض|عو[ّ]?ضني|عو[ّ]?ضوني|compensat/i,
     move: /انقلني|انقلوني|نقلي|حو[ّ]?لوني|(غي[ّ]?ر|بد[ّ]?ل)(وا)? (لي )?(غرفتي|الغرفة|جناحي|الجناح)|غرفة (ثانية|[أا]خرى|بديلة|غيرها|غير (هذي|هذه|ذي))|جناح (ثاني|[آا]خر|بديل)|move me|change (my|the) room|another room|different room|switch rooms?/i,
     late: /(ت[أا]خير|تمديد|[أا]خ[ّ]?ر(وا)?( لي)?|مد[ّ]?د(وا)?( لي)?) (ال)?(مغادرة|خروج|طلعة|تشيك ?[أا]وت|شيك ?[أا]وت)|مغادرة مت[أا]خرة|[أا]طلع مت[أا]خر|late check-?out|check ?out late|leave later|extend (my )?check-?out/i,
-    bill: /فاتورتي|ال[إا]جمالي|كم (علي|المبلغ)|my bill|\btotal\b|how much do i (owe|pay)/i,
-    rates: /سعر|[أا]سعار|بكم|كم الليلة|التكلفة|price|\brates?\b|how much|cost/i,
+    /* a question about money is answered by the hotel's code, never by a model: the guest's own bill, or tonight's rates.
+       Gulf wording, repeated letters and common misspellings are read here, so that these never need a model. */
+    bill: /ف+ا+ت+و+ر+ت?[يهة]|(ال)?ف+ا+ت+و+ر+[ةه]|ال[إا]جمالي|[إا]جمالي (حساب|فاتور|[إا]قام)|حسابي|(كم|وش|[إا]يش|شنو) (صار |باقي |المطلوب |المبلغ |الحساب |حسابي |علي)|كم (علي|المبلغ|باقي|المطلوب|[أا]دفع|راح [أا]دفع|الحساب)|الحساب كم|(وش|[إا]يش) علي|\bmy (bil+|invoice|balance|charges?|tab)\b|\b(the )?(bil+|invoice)\b(?! of| for)|\btotal\b|how m[ua]t?ch (do|will|did|must|should) i (owe|pay)|what do i owe|how m[ua]t?ch is my (stay|bill|room)|amount due/i,
+    rates: /س+ع+ر+|[أا]س+ع+ا+ر|ب+ك+م|كم (ال)?ل+ي+ل+[ةه]|(ال)?ل+ي+ل+[ةه] (ب?كم|عليكم كم)|كم (ال)?(غرف[ةه]|جناح|سويت)|كم (ت|ي)(كل[ّ]?ف|[اأ]خذون|حسبون)|كم حق|التكلف[ةه]|تسعير|\bpri[cs]es?\b|\bpric(ing)?\b|\brates?\b|how m[ua]t?ch(?! time| longer| later)|\bhw much\b|\bcosts?\b|per night|a night\b|nightly|\btariff/i,
     status: /(غرفتي|جناحي|الغرفة|الجناح).{0,20}(جاهز|تجهز|حالة)|جاهزة|is (my|the) (room|suite) ready|room (status|ready)|ready yet/i,
     mine: /حجزي|معلوماتي|بياناتي|\bmy (booking|reservation|details)\b/i,
     yes: /^(نعم|[إا]يه|[إا]ي|[أا]جل|تمام|موافق|طيب|انقلني|[أا]ك[ّ]?د|نف[ّ]?ذ|yes|yep|ok|okay|sure|please do|go ahead|move me|confirm|do it)(\s|[.!،,]|$)/i,
@@ -154,6 +168,45 @@
       if (i !== main && PARTS.includes(i) && !out.includes(i) && stance(c, i) === 'asked') out.push(i);
     }
     return out;
+  }
+
+  /* ---------- a message that names nothing ----------
+     "fix it", "صلحوها", "do it", "help", "it is broken": no object, and often no problem either. Acting on it would open a ticket that
+     says "fix it". With no earlier turn it could point to, the guest is asked what they mean.
+     With an earlier turn that says what "it" is: if that turn left the matter undone, it is taken up now; if it was already done,
+     the guest is told it is registered, and nothing is opened twice. */
+  const VAGUE = new RegExp('^(?:' + [
+    '(?:please |pls |plz |can you |could you |just )*(?:fix|repair|sort|solve|handle|do|check|change|resolve)(?: (?:it|this|that|them|it out|this out|something|something about it))?',
+    '(?:please |pls |i need |i want |can you |could you |need )*help(?: me| us)?(?: out)?',
+    '(?:i have |there is |there\'s |got )?(?:a |an )?(?:problem|issue)', 'do something', 'sort it out', 'make it work',
+    '(?:it(?: is|\'s)? )?(?:not working|broken)', 'something is wrong',
+    '(?:[أا]?صلح|عدل|سو|حل|ضبط|زبط|نف[ّ]?ذ|غي[ّ]?ر)(?:وا|وها|وه|ها|ه|ي|يها)?(?: (?:لي|لنا))?(?: (?:الموضوع|المشكل[ةه]|هذا|هذي|ذا|ذي|شي))?',
+    '(?:[أا]بي|[أا]بغى|[أا]حتاج|[أا]ريد|محتاج) (?:مساعد[ةه]|حل|[أا]حد يساعدني)', 'مساعد[ةه]', 'ساعد(?:ني|وني|ونا)', 'شوف(?:وا)?(?: لي| لنا)? (?:حل|الموضوع|المشكل[ةه])', 'تصرف(?:وا)?',
+    '(?:عندي|في|فيه|عندنا) مشكل[ةه]', 'مشكل[ةه]', '(?:ما|مو|مش) (?:شغال[ةه]?|يشتغل|تشتغل)', 'خربان[ةه]?'
+  ].join('|') + ')(?: (?:please|pls|now|asap|quickly|لو سمحت|لو سمحتوا|الحين|بسرعة|الله يعافيك))*[\\s.!؟?]*$', 'i');
+  const vague = raw => VAGUE.test(norm(raw).trim());
+  const ACTED = ['refund', 'comp', 'move', 'late', 'code', 'give_key', 'clean', 'maint', 'requests'];
+  /* what a vague message points back to: the last turn, when what the guest wrote then asks for something. null: nothing to point to. */
+  const RECENT = 10 * 60000;                       // an earlier turn is something "it" can point to for ten minutes
+  const lastOf = history => { const l = (history || [])[(history || []).length - 1]; return l && l.typed !== false && l.heard && !vague(l.heard) && (!l.at || Date.now() - l.at <= RECENT) ? l : null; };      // something the guest wrote that says something: not a button they pressed, not another "fix it"
+  function refOf(history, state, at) {
+    const last = lastOf(history);
+    if (!last) return null;
+    const intent = intentOf(last.heard, state, at).intent;
+    if (!ACTED.includes(intent)) return null;
+    const done = Array.isArray(last.did) ? last.did.some(d => /:ok$/.test(d)) : !!last.said;
+    return { intent, text: String(last.heard), done };
+  }
+
+  /* what never goes to a model: the three forbidden things, a number that identifies, a bare yes or no to an offer, and, when it is
+     all the message asks, a question about tonight's rates, the guest's own bill, or the check-out, tax or refund policy.
+     The code answers those, with its own numbers and the hotel's own sentences. */
+  const LOCAL = ['card', 'other_room', 'price', 'identify', 'choice'], MONEY = ['rates', 'bill'], POLICY = ['checkout', 'tax', 'refunds'];
+  function local(raw, state, at) {
+    const it = intentOf(raw, state, at), i = it.intent;
+    if (LOCAL.includes(i)) return true;
+    if (i === 'info') return POLICY.includes(it.topic) && !others(raw, state, at, 'bill').length;      // a policy question has one answer: the hotel's own sentence
+    return MONEY.includes(i) && !others(raw, state, at, i).length;
   }
 
   const eligible = state => { const b = state.booking; return !!(b && b.paid && !b.comp && !b.refunded && state.perms.limit > 0); };
@@ -265,8 +318,15 @@
       const n = steps.filter(s => s.intent === 'confirmed').length;
       return n < kept.length ? call(kept[n].tool, kept[n].args, 'confirmed') : DONE;
     }
-    const a = steps.length ? follow(input, turn.state, steps) : first(input, turn.state);
-    if (input.type !== 'text') return a;
+    if (!steps.length && input.type === 'text' && vague(input.text) && intentOf(input.text, turn.state, input.at).intent !== 'choice') {      // ("do it" to an offer on the table is a yes)
+      const ref = refOf(turn.history, turn.state, input.at);
+      if (!ref) return Object.assign(say('clarify', 'clarify'), { text: 'vague' });
+      if (ref.done) return Object.assign(say('followup', 'answer'), { text: ref.intent });
+      input.refers = ref.text;                       // the turn carries on as if the guest had repeated what they wrote before
+    }
+    const told = input.refers ? Object.assign({}, input, { text: input.refers }) : input;
+    const a = steps.length ? follow(told, turn.state, steps) : first(told, turn.state);
+    if (input.type !== 'text' || input.refers) return a;
     if (!steps.length) { const main = intentOf(input.text, turn.state, input.at).intent; input.rest = a.say === 'clarify' ? [] : others(input.text, turn.state, input.at, main); }
     if (!input.rest || !input.rest.length || steps.some(s => s.say === 'unhandled')) return a;
     if (a.done) return Object.assign(say('unhandled', 'unhandled'), { text: input.rest.join(',') });      // say which parts were left, rather than drop them
@@ -274,5 +334,5 @@
   }
 
   SILA.brains = SILA.brains || {};
-  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, splitRequests, kindOf, latin, norm });
+  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, local, vague, refOf, lastOf, langOf, splitRequests, kindOf, latin, norm });
 })(typeof window !== 'undefined' ? window : globalThis);
