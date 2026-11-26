@@ -6,9 +6,10 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "build": "terser agent/tools.js agent/permissions.js agent/brain-rules.js agent/brain-model.js agent/loop.js connectors/connector.js connectors/sync.js connectors/demo-partner.js app.js --compress --mangle --comments false -o app.min.js && terser connectors/connector.js connectors/sync.js connectors/demo-partner.js partner.js --compress --mangle --comments false -o partner.min.js",
+    "build": "terser agent/tools.js agent/permissions.js agent/brain-rules.js agent/claims.js agent/brain-model.js agent/loop.js connectors/connector.js connectors/sync.js connectors/demo-partner.js app.js --compress --mangle --comments false -o app.min.js && terser connectors/connector.js connectors/sync.js connectors/demo-partner.js partner.js --compress --mangle --comments false -o partner.min.js",
     "test": "playwright test",
-    "shots": "node tests/shots.mjs"
+    "shots": "node tests/shots.mjs",
+    "eval": "node tests/eval/run.mjs"
   },
   "engines": {
     "node": ">=20.12"

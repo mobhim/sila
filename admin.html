@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preload" href="fonts/thmanyah-serif-display-regular.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/thmanyah-serif-display-black.woff2?v=2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body data-page="admin">
 <div class="adm" dir="rtl" lang="ar">
@@ -153,9 +153,9 @@
     var q = new URLSearchParams(location.search).get('lang'), l = q;
     try { if (q !== 'ar' && q !== 'en') l = localStorage.getItem('sila.lang'); } catch (e) {}
     if (l !== 'ar' && l !== 'en') l = /^ar\b/i.test(navigator.language || '') ? 'ar' : 'en';
-    if (l === 'en') document.write('<script src="i18n.en.js?v=12"><\/script>');
+    if (l === 'en') document.write('<script src="i18n.en.js?v=13"><\/script>');
   })();
 </script>
-<script src="app.min.js?v=18"></script>
+<script src="app.min.js?v=20"></script>
 </body>
 </html>

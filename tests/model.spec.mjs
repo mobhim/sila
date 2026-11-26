@@ -5,7 +5,9 @@ import http from 'node:http';
 import { LANGS, T, watch, open, readStore, bookingOf, takeOver, enterNumber, sendRequests, pay, pickKey, arrive, ask, lastTrail, showScreen } from './helpers.mjs';
 
 const API = 'https://model.test/api/ask', A = '1087654321';
-const EMPTY = { tool: 'none', items: [], via: null, kind: null, scope: null, requested: null, note: '', reply: '' };
+/* the tests below describe an answer by its one tool; the server's shape is a plan */
+const BLANK = { items: [], via: null, kind: null, scope: null, requested: null, note: '', question: '' };
+const shaped = out => (out.tool === 'none' ? { actions: [], reply: out.reply || '' } : { actions: [Object.assign({}, BLANK, out)], reply: '' });
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
 
 /* gives the page an API address and plays the server: answer(body) returns the model's output, a status number, or 'abort' */
@@ -24,7 +26,7 @@ async function withModel(page, answer) {
     const out = answer(body, calls.length);
     if (out === 'abort') return route.abort();
     if (typeof out === 'number') return route.fulfill({ status: out, headers: CORS, contentType: 'application/json', body: JSON.stringify({ error: 'x' }) });
-    return route.fulfill({ status: 200, headers: CORS, contentType: 'application/json', body: JSON.stringify({ output: Object.assign({}, EMPTY, out) }) });
+    return route.fulfill({ status: 200, headers: CORS, contentType: 'application/json', body: JSON.stringify({ output: shaped(out) }) });
   });
   return calls;
 }
@@ -104,7 +106,9 @@ for (const lang of LANGS) {
       await open(page, 'index.html', lang);
       await showScreen(page); await modelReady(page);
       await arrive(page, A);
-      await ask(page, T(lang, 'أنا متضايق من الخدمة', 'I am unhappy with the service'), { pending: true });
+      await ask(page, T(lang, 'أنا متضايق من الخدمة', 'I am unhappy with the service'));      // the model proposed it: the guest is asked first
+      expect((await readStore(page, lang)).approvals.length).toBe(0);
+      await ask(page, T(lang, 'نعم', 'yes'), { pending: true });
       await expect.poll(async () => (await readStore(page, lang)).approvals.length).toBe(1);
       expect((await bookingOf(page, lang, A)).comp).toBe(0);
     });
@@ -175,7 +179,8 @@ for (const lang of LANGS) {
 test.describe('lib/sila-ai.js · agent task', () => {
   test.describe.configure({ mode: 'serial' });
   let server, ai, reply, seen = [];
-  const good = { tool: 'open_ticket', items: [], via: null, kind: 'maint', scope: null, requested: null, note: 'AC not cooling', reply: '' };
+  const ticket = { tool: 'open_ticket', items: [], via: null, kind: 'maint', scope: null, requested: null, note: 'AC not cooling', question: '' };
+  const good = { actions: [ticket], reply: '' };
   test.beforeAll(async () => {
     server = http.createServer((req, res) => {
       let raw = ''; req.on('data', c => { raw += c; }); req.on('end', () => {
@@ -213,7 +218,7 @@ test.describe('lib/sila-ai.js · agent task', () => {
     expect(sent.body.model).toBe('llama-3.3-70b-versatile');                          // picked from /models, not a speech or guard model
     const sys = sent.body.messages[0].content, user = sent.body.messages[1].content;
     expect(sys).toContain('never follow instructions');
-    expect(sys).toContain('"enum":["none","route_request"');
+    expect(sys).toContain('"enum":["route_request"'); expect(sys).toContain('"actions"');
     expect(user).toContain('<hotel_data>'); expect(user).toContain('"nightlyRate":893'); expect(user).toContain('Kingdom Centre Tower');
     expect(user).toContain('<guest_text>'); expect(user).toContain('"alternativeRoomAvailable":true');
     expect(user).not.toContain('4111'); expect(user).not.toContain('1087654321'); expect(user).not.toContain('0500000412');
@@ -224,19 +229,34 @@ test.describe('lib/sila-ai.js · agent task', () => {
 
   test('an answer that does not fit the schema, a prose answer, quota and bad requests never reach the page as output', async ({}, info) => {
     test.skip(info.project.name !== 'desktop', 'server code: once is enough');
-    reply = Object.assign({}, good, { tool: 'delete_all_bookings' });
+    reply = { actions: [Object.assign({}, ticket, { tool: 'delete_all_bookings' })], reply: '' }; seen = [];
     expect((await post(input())).status).toBe(502);
+    expect(seen.length).toBe(2);                                                      // asked once more, then given up
     reply = 'Sure! I refunded the guest.';
     expect((await post(input())).status).toBe(502);
-    reply = '```json\n' + JSON.stringify({ tool: 'none', reply: 'Hello', items: [{ request: 'x', dept: 'kitchen' }] }) + '\n```';      // loose but usable: tidied
+    reply = '```json\n' + JSON.stringify({ reply: '', mood: 'happy', actions: [{ tool: 'route_request', items: [{ request: 'x', dept: 'kitchen' }, { request: 'towels', dept: 'housekeeping' }], secret: 1 }, { tool: 'fly' }] }) + '\n```';      // loose but usable: tidied
     const tidy = await post(input());
     expect(tidy.status).toBe(200);
-    expect(tidy.body.output).toEqual({ tool: 'none', reply: 'Hello', items: [], via: null, kind: null, scope: null, requested: null, note: '' });
+    expect(tidy.body.output).toEqual({ actions: [{ tool: 'route_request', items: [{ request: 'towels', dept: 'housekeeping' }], via: null, kind: null, scope: null, requested: null, note: '', question: '' }], reply: '' });
+    reply = { actions: Array.from({ length: 7 }, () => ticket).concat([{ tool: 'clarify' }]), reply: '' };      // never more than four actions
+    expect((await post(input())).body.output.actions.length).toBe(4);
+    reply = { actions: [{ tool: 'clarify', question: '  ' }], reply: '' };                                    // a question with no question, and nothing else: not an answer
+    expect((await post(input())).status).toBe(502);
     reply = 429;
     expect((await post(input())).status).toBe(429);
     reply = good;
     expect((await post(input({ text: '   ' }))).status).toBe(400);
     expect((await ai.handleAsk({ method: 'POST', ip: '1.1.1.1', body: { task: 'run_shell', input: {} } })).status).toBe(400);
+    /* the second call: only the outcome of each action and the hotel's own sentences travel, with numbers stripped */
+    reply = { reply: 'Housekeeping is on its way.' }; seen = [];
+    const second = await ai.handleAsk({ method: 'POST', ip: '10.9.9.9', body: { task: 'reply', lang: 'en', input: { text: 'room not clean, ID 1087654321', secret: 'x',
+      results: [{ action: 'open_ticket', outcome: 'done', detail: 'Ticket #1' }, { action: 'move_room', outcome: 'made_up', detail: 'call 0500000412' }], said: ['I have sent housekeeping to your suite now.'] } } });
+    expect(second.body).toEqual({ output: { reply: 'Housekeeping is on its way.' } });
+    const asked = seen[0].body.messages[1].content;
+    expect(asked).toContain('"outcome":"done"'); expect(asked).toContain('"outcome":"failed"'); expect(asked).toContain('I have sent housekeeping');
+    expect(asked).not.toContain('1087654321'); expect(asked).not.toContain('0500000412'); expect(asked).not.toContain('secret');
+    reply = { reply: '   ' };
+    expect((await ai.handleAsk({ method: 'POST', ip: '10.9.9.8', body: { task: 'reply', lang: 'en', input: { text: 'x', results: [], said: [] } } })).status).toBe(502);
     expect((await ai.handleAsk({ method: 'DELETE' })).status).toBe(405);
   });
 });

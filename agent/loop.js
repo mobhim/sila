@@ -10,11 +10,17 @@
      approve(call, d)       resolves true or false when a staff member decides
      speak(code, state)     says one of the page's own sentences
      refuse(call, d)        tells the guest a call was refused
+     failed(call, d, e)     tells the guest a tool broke while it ran; the turn carries on
+     hold(call, d)          keeps a call that a model proposed until the guest confirms it (see CONFIRM)
      record(entry)          one line of the agent's trail
      alive()                false once the guest has moved on; the turn stops quietly */
 (root => {
   const SILA = root.SILA = root.SILA || {};
   const MAX_STEPS = 6;
+  /* a model can mishear. These tools change the booking, so when a brain other than the written rules proposes one, it is not
+     run: the guest is asked first, and their "yes" comes back as a new turn that the rules brain proposes and the engine decides.
+     Reading tools, a ticket and a request to a department need no confirmation. */
+  const CONFIRM = ['move_room', 'late_checkout', 'compensate', 'reissue_key', 'issue_key'];
 
   async function turn(o) {
     const steps = [], input = Object.assign({}, o.input, { at: o.snapshot().stage });
@@ -32,7 +38,7 @@
       if (!act || act.done) break;
 
       if (act.say) {
-        const step = { n, say: String(act.say), intent: act.intent, brain: act.by || brain.name };
+        const step = { n, say: String(act.say), intent: act.intent, brain: act.by || brain.name, text: act.text };
         steps.push(step); o.record(Object.assign({ kind: 'say' }, step));
         await o.speak(step.say, state, act.text);
         if (!o.alive()) return { steps, stopped: true };
@@ -47,6 +53,10 @@
         step.result = { ok: false, denied: true, code: d.code };
         o.record(Object.assign({ kind: 'tool' }, step));
         await o.refuse(call, d, state);
+      } else if (step.brain !== 'rules' && CONFIRM.includes(call.tool) && o.hold) {
+        step.held = true; step.result = { ok: false, held: true };
+        o.record(Object.assign({ kind: 'tool' }, step));
+        await o.hold(call, d, state);
       } else {
         let go = true;
         if (d.verdict === 'approve') {
@@ -55,9 +65,15 @@
           if (!o.alive()) return { steps, stopped: true };
           step.approved = !!go;
         }
-        step.result = go ? await o.run(call.tool, d.args, d, { first: n === 0, steps }) : { ok: false, declined: true };
+        let broke = null;
+        if (!go) step.result = { ok: false, declined: true };
+        else {
+          try { step.result = await o.run(call.tool, d.args, d, { first: n === 0, steps }); }
+          catch (e) { broke = e; step.result = { ok: false, error: true }; }      // a tool that throws is one failed step, not a broken turn
+        }
         if (!step.result) step.result = { ok: false };
         o.record(Object.assign({ kind: 'tool' }, step));
+        if (broke && o.failed) await o.failed(call, d, broke);
         if (!go && o.declined) await o.declined(call, d, state);
       }
       steps.push(step);
@@ -67,5 +83,5 @@
     return { steps, stopped: false, limit: n >= MAX_STEPS };
   }
 
-  SILA.agent = Object.freeze({ turn, MAX_STEPS });
+  SILA.agent = Object.freeze({ turn, MAX_STEPS, CONFIRM: Object.freeze(CONFIRM.slice()) });
 })(typeof window !== 'undefined' ? window : globalThis);

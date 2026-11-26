@@ -206,7 +206,7 @@ html[dir="ltr"] .bill dd{text-align:right}
 .ticker b{font-weight:600;color:var(--ink)}
 .ticker b.flash{animation:rise .5s var(--out)}
 .tag{display:inline-block;border:1px solid currentColor;border-radius:99px;padding:0 9px;font-size:11.5px;font-weight:600;white-space:nowrap;line-height:1.75}
-.tag.auto,.tag.ok{color:var(--ok)}.tag.limit{color:var(--brand)}.tag.staff{color:var(--muted)}.tag.wait{color:var(--warn)}.tag.no{color:var(--bad)}
+.tag.auto,.tag.ok{color:var(--ok)}.tag.limit{color:var(--brand)}.tag.staff{color:var(--muted)}.tag.wait,.tag.ask{color:var(--warn)}.tag.no{color:var(--bad)}
 
 .bar{grid-area:bar;display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:2px 4px 4px}
 .demo-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 17px;border-radius:99px;border:0;background:var(--ink);color:#fff;font-size:13.5px;font-weight:600;transition:background-color .25s,transform .3s var(--out)}
@@ -384,6 +384,11 @@ html[dir="ltr"] .price td:not(:first-child),html[dir="ltr"] .price th:not(:first
 .help-fab{position:fixed;inset-inline-end:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:95;width:58px;height:58px;border-radius:50%;border:0;background:var(--brand);color:#fff;display:grid;place-items:center;
   box-shadow:0 16px 30px -12px rgba(8,42,34,.6),0 0 0 3px var(--lime);transition:transform .25s var(--out)}
 .help-fab:hover{transform:scale(1.07)}
+/* quick booking: a labelled pill beside the chat button, in the same lime as the page's other primary actions */
+.help-book{position:fixed;inset-inline-end:88px;bottom:calc(25px + env(safe-area-inset-bottom,0px));z-index:95;min-height:44px;padding:6px 20px;border:0;border-radius:99px;background:var(--lime);color:var(--ink);
+  font-family:var(--f-display);font-weight:700;font-size:15px;line-height:1.4;box-shadow:0 14px 26px -14px rgba(8,42,34,.6),0 0 0 3px var(--brand);transition:transform .25s var(--out)}
+.help-book:hover{transform:translateY(-2px)}
+.help-book[hidden]{display:none}
 .help-fab svg{width:25px;height:25px}
 .help-box{position:fixed;inset-inline-end:18px;bottom:calc(90px + env(safe-area-inset-bottom,0px));z-index:95;width:min(380px,calc(100vw - 32px));height:min(540px,calc(100vh - 130px));
   display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:22px;background:var(--surface);border:1px solid var(--stroke);box-shadow:var(--shadow);animation:rise .3s var(--out)}
@@ -632,7 +637,7 @@ html[data-theme="dark"] .foot-link{color:var(--lime)}
 .m.trail li.stop{color:var(--warn)}
 .m.trail li span.tag{font-size:11px;color:var(--brand)}
 .m.trail li span.tag.auto,.m.trail li span.tag.ok{color:var(--ok)}
-.m.trail li span.tag.wait{color:var(--warn)}
+.m.trail li span.tag.wait,.m.trail li span.tag.ask{color:var(--warn)}
 .m.trail li span.tag.no{color:var(--bad)}
 .tag.never,.m.trail li span.tag.never{color:#fff;background:var(--bad);border-color:var(--bad)}
 .trail-log{max-height:420px;overflow-y:auto}
