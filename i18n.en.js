@@ -1010,5 +1010,8 @@ window.SILA_EN = {
   "في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟": "Your message both asks for and rules out {what}. I did not do anything. Which one do you want?",
   "نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.": "I handled one request from your message. Still not handled: {what}. Send each one as its own message and I will do it.",
   "تعذّر التنفيذ: خلل في الأداة": "Could not run: the tool failed",
-  "تعذّر تنفيذ «{what}» الآن بسبب خلل عندنا، ولم يتغيّر شيء. موظف الاستقبال يستطيع مساعدتك فيه.": "I could not carry out “{what}” just now because of a fault on our side, and nothing was changed. Reception can help you with it."
+  "تعذّر تنفيذ «{what}» الآن بسبب خلل عندنا، ولم يتغيّر شيء. موظف الاستقبال يستطيع مساعدتك فيه.": "I could not carry out “{what}” just now because of a fault on our side, and nothing was changed. Reception can help you with it.",
+  "من المعالم في بيانات الفندق: ": "Landmarks in the hotel’s data: ",
+  ". التفاصيل في صفحة المعالم.": ". The landmarks page has the details.",
+  "ليس في بيانات الفندق قائمة بالمطاعم القريبة، ولا أخمّن. خدمة الغرف متاحة لك، وإن أردت توصية فاكتب طلبك وأحوّله للكونسيرج.": "The hotel’s data holds no list of nearby restaurants, and I do not guess. Room service is available to you; if you want a recommendation, write your request and I will pass it to the concierge."
 };

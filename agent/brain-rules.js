@@ -15,6 +15,36 @@
   const say = (code, intent, end) => ({ say: code, intent: intent || code, end: end !== false });
   const latin = s => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
 
+  /* Arabic typed in Latin letters ("el mokayef 5arban"): the common hotel words are put back into Arabic before the rules read
+     the message. A short list of spellings, not a transliterator; what it misses goes to reception as a note, as before. */
+  const ARABIZI = [
+    [/\b(el[ -]?|al[ -]?)?(mo?u?kay+[ei]f|mkay+[ei]f|taky[ei]+f)\b/gi, 'المكيف'],
+    [/\b(5arban[ae]?|kh?arban[ae]?|5rban|3a[t6]lan[ae]?|baye[zd]|m[aeou]sh? sha(gh|8)[a]?l|ma y[ei]?sh?ta(gh|8)[ae]?l|ma ysh?tghl)\b/gi, 'خربان'],
+    [/\b(7ar+|7ara)\b/gi, 'حر'],
+    [/\b(el[ -]?|al[ -]?)?(gh|8|g)[ou]rf(a|ti|ty)\b/gi, 'الغرفة'],
+    [/\b(w[ei]s5[ae]?|waskh[ae]?|m[ou]sh? n[ae][dt]h?[ei]+f[ae]?)\b/gi, 'وسخة'],
+    [/\b(tan[dz]h?[ei]+f|na[dt]h?afa)\b/gi, 'تنظيف'],
+    [/\b(manash[ei]f|f[ou]wa[t6])\b/gi, 'مناشف'],
+    [/\b(m[eoi]f?ta[7h]|m[eoi]fta7)\b/gi, 'مفتاح'],
+    [/\b(el[ -]?|al[ -]?)(ramz|kod|code)\b|\bramz\b/gi, 'الرمز'],
+    [/\b(el[ -]?|al[ -]?)bab\b/gi, 'الباب'],
+    [/\b(ma|mo|mu|msh|mesh) (b?y[ei]fta[7h])\b/gi, 'لا يفتح'],
+    [/\b(f[ou]?[t6]oo?r|[ei]f[t6]ar)\b/gi, 'فطور'],
+    [/\b(f[eu]?loo?si|f[eu]?loo?s|flousi?)\b/gi, 'فلوسي'],
+    [/\b(ra[jg]+[ae]?3o?(oli|li)?|[ei]st[ei]r[jg]a3)\b/gi, 'استرجاع'],
+    [/\b([eio]n[28gq][eo]lni|na[gq]lni)\b/gi, 'انقلني'],
+    [/\b(gh|8)ay+[eia]ro?\b/gi, 'غير'],
+    [/\b(a(5|kh)[eia]?ro?(oli| li)?)\b/gi, 'أخروا لي'],
+    [/\b(ta2?(5|kh)[ei]+r)\b/gi, 'تأخير'],
+    [/\b(el[ -]?|al[ -]?)?m[ou](gh|8)ad[a]?ra\b/gi, 'المغادرة'],
+    [/\b(se3r|as3ar|b[ei]?kam)\b/gi, 'سعر'],
+    [/\b(ta3w[ei]+[dz]|3aw+[ae]?[dz](ni|oni|ooni))\b/gi, 'تعويض'],
+    [/\b(sar[ei]+r)\b/gi, 'سرير'], [/\b(m[ei]khad+a|w[ei]sada)\b/gi, 'وسادة'], [/\b(may+a|mo[iy]+a)\b/gi, 'ماء'],
+    [/\b(say+ara)\b/gi, 'سيارة'], [/\b(ma[t6]ar)\b/gi, 'مطار'], [/\b(ma[t6]3am|mata3em)\b/gi, 'مطعم'],
+    [/\b(wein|wain|ween)\b/gi, 'وين'], [/\b(a[2gq]rab)\b/gi, 'أقرب'], [/\b(th?an[iy]+a|tany+a)\b/gi, 'ثانية']
+  ];
+  const norm = s => { let t = latin(s); if (/[a-z]/i.test(t)) for (const [re, word] of ARABIZI) t = t.replace(re, ' ' + word + ' '); return t.replace(/\s+/g, ' '); };
+
   /* ---------- the written rules the prototype already had: requests to departments, and the kind of a problem ---------- */
   const REQ_RULES = [
     [/سرير|وساد|مناشف|منشف|تنظيف|بطاني|شرشف|مهد|\b(bed|pillows?|towels?|clean\w*|blankets?|sheets?|crib|cot)\b/i, 'housekeeping'],
@@ -22,12 +52,14 @@
     [/مكيف|تكييف|[إا]نارة|[إا]ضاءة|تلفاز|تلفزيون|[إا]نترنت|واي ?فاي|صيانة|\b(ac|air ?con\w*|lights?|lighting|tv|wi-?fi|internet|maintenance)\b/i, 'maintenance'],
     [/سيارة|مطار|تاكسي|توصيل|جولة|مطعم|موقف|\b(car|airport|taxi|transfer|tour|restaurant|parking)\b/i, 'concierge']
   ];
-  const deptOf = s => (REQ_RULES.find(r => r[0].test(s)) || [0, 'reception'])[1];
+  const deptOf = s => { const t = norm(s); return (REQ_RULES.find(r => r[0].test(t)) || [0, 'reception'])[1]; };
   const splitRequests = text => String(text).split(/[،,.\n؛;]+/).map(s => s.trim()).filter(Boolean).slice(0, 6).map(s => ({ request: s.slice(0, 80), dept: deptOf(s) }));
   function kindOf(t) {
     if (/استرجاع|استرداد|استرجع|استرد[ّ]?|رج[ّ]?ع(وا)? (لي )?(المبلغ|فلوس)|[أا]رجع(وا)? (لي )?(المبلغ|فلوس)|فلوسي|[إا]لغاء|[أا]لغي|refund|money back|cancel/i.test(t)) return 'refund';
-    if (/رمز|كود|الباب|يفتح|قفل|بطاقة|مفتاح|\b(code|door|open|lock|card|key)\b/i.test(t)) return 'code';
-    if (/نظيف|نظاف|وسخ|متسخ|رائحة|قذر|clean|dirty|smell|filthy/i.test(t)) return 'clean';
+    if (/رمز|كود|الباب|يفتح|قفل|مقفل|مسك[ّ]?ر|بطاقة|كرت|مفتاح|\b(code|door|open|lock|card|key)\b/i.test(t)) return 'code';
+    if (/نظيف|نظاف|وسخ|وصخ|متسخ|رائحة|ريحة|قذر|زبالة|clean|dirty|smell|filthy/i.test(t)) return 'clean';
+    /* Gulf and everyday wording for a fault: "hot", "not cooling", "dead", "cut off", "not running" */
+    if (/(?<![\u0621-\u064A])(حر|حار[ةه]?|برد|بارد[ةه]?|طافي[ةه]?|مقطوع[ةه]?|خرب|خربت|عطلان[ةه]?|بايظ[ةه]?)(?![\u0621-\u064A])|ما (ي|ت)بر[ّ]?د|م[وش] (شغ[ّ]?ال|راضي)|ما (ي|ت)شتغل|يسر[ّ]?ب|يخر[ّ]?|\b(too (hot|cold)|not cooling|won'?t (turn on|work)|doesn'?t work|stopped working|out of order)\b/i.test(t)) return 'maint';
     if (/مكيف|تكييف|صيانة|عطل|خربان|معطل|لا يعمل|ما يشتغل|ماء|سباكة|تسريب|كهرب|[إا]نارة|[إا]ضاءة|تلفاز|[إا]نترنت|\b(ac|air ?con\w*|tv)\b|maintenance|broken|not working|water|plumbing|leak|electric|light|internet|wi-?fi/i.test(t)) return 'maint';
     return 'other';
   }
@@ -42,8 +74,8 @@
     price: /(?:^|\s)(غي[ّ]?ر|عد[ّ]?ل|خف[ّ]?ض|نز[ّ]?ل|اجعل|خل[ّ]?[يه]?|صف[ّ]?ر)(وا|ي)?\s.{0,24}(سعر|المبلغ|الفاتورة|ال[إا]جمالي)|خصم|تخفيض|مجان|بدون (دفع|مقابل)|discount|(change|lower|reduce|set|edit|override) (the |my )?(price|rate|bill|total)|for free|free of charge|without paying|skip (the )?payment|waive|mark (it |me )?as paid/i,
     refund: /استرجاع|استرداد|استرجع|استرد[ّ]?|رج[ّ]?ع(وا)? (لي )?(المبلغ|فلوس)|[أا]رجع(وا)? (لي )?(المبلغ|فلوس)|فلوسي|[إا]لغاء الحجز|[أا]لغي|refund|money back|cancel/i,
     comp: /تعويض|عو[ّ]?ضني|عو[ّ]?ضوني|compensat/i,
-    move: /انقلني|نقلي|غي[ّ]?ر(وا)? (لي )?(غرفتي|الغرفة|جناحي|الجناح)|غرفة (ثانية|[أا]خرى|بديلة)|جناح (ثاني|[آا]خر|بديل)|move me|change (my|the) room|another room|different room|switch rooms?/i,
-    late: /ت[أا]خير المغادرة|مغادرة مت[أا]خرة|تمديد المغادرة|[أا]خ[ّ]?ر(وا)? (لي )?المغادرة|مد[ّ]?د(وا)? (لي )?المغادرة|late check-?out|check ?out late|leave later|extend (my )?check-?out/i,
+    move: /انقلني|انقلوني|نقلي|حو[ّ]?لوني|(غي[ّ]?ر|بد[ّ]?ل)(وا)? (لي )?(غرفتي|الغرفة|جناحي|الجناح)|غرفة (ثانية|[أا]خرى|بديلة|غيرها|غير (هذي|هذه|ذي))|جناح (ثاني|[آا]خر|بديل)|move me|change (my|the) room|another room|different room|switch rooms?/i,
+    late: /(ت[أا]خير|تمديد|[أا]خ[ّ]?ر(وا)?( لي)?|مد[ّ]?د(وا)?( لي)?) (ال)?(مغادرة|خروج|طلعة|تشيك ?[أا]وت|شيك ?[أا]وت)|مغادرة مت[أا]خرة|[أا]طلع مت[أا]خر|late check-?out|check ?out late|leave later|extend (my )?check-?out/i,
     bill: /فاتورتي|ال[إا]جمالي|كم (علي|المبلغ)|my bill|\btotal\b|how much do i (owe|pay)/i,
     rates: /سعر|[أا]سعار|بكم|التكلفة|price|\brates?\b|how much|cost/i,
     status: /(غرفتي|جناحي|الغرفة|الجناح).{0,20}(جاهز|تجهز|حالة)|جاهزة|is (my|the) (room|suite) ready|room (status|ready)|ready yet/i,
@@ -51,8 +83,18 @@
     yes: /^(نعم|[إا]يه|[إا]ي|[أا]جل|تمام|موافق|طيب|انقلني|[أا]ك[ّ]?د|نف[ّ]?ذ|yes|yep|ok|okay|sure|please do|go ahead|move me|confirm|do it)(\s|[.!،,]|$)/i,
     no: /^(لا|no|nope|[أا]نتظر|سأنتظر|wait|i(’|'| wi)ll wait)(\s|[.!،,]|$)/i
   };
+  /* a question about the hotel's surroundings or its policies is answered from the hotel's data, not logged as a request */
+  const ASKS = /[?؟]|^(وين|[أا]ين|فين|متى|هل|وش|[إا]يش|شنو|ما هي|ما هو|كيف|في|فيه|where|when|what|which|how|is there|are there|do you|does|can i|any)(?![\u0621-\u064Aa-z])|[أا]قرب|قريب|nearest|nearby|near (the|here)|recommend|تنصح|تقترح/i;
+  const INFO = [
+    ['checkout', /(متى|وقت|موعد|ساعة|كم الساعة).{0,20}(المغادرة|الخروج|تسجيل الخروج)|(المغادرة|الخروج).{0,12}(متى|الساعة كم|[أا]ي ساعة)|check-?out time|(what time|when).{0,24}check-?out/i, false],
+    ['refunds', /سياسة.{0,12}(الاسترجاع|الاسترداد|ال[إا]لغاء)|(refund|cancell?ation) policy/i, true],
+    ['restaurants', /مطعم|مطاعم|restaurants?|places? to eat|where (can|to) (i )?eat/i, true],
+    ['landmarks', /معالم|معلم|[أا]ماكن.{0,12}(زيار|سياح)|سياح|وين [أا]روح|[أا]زور|landmarks?|sights?|attractions?|places to (see|visit)|things to do|what to (see|visit)/i, true],
+    ['tax', /ضريبة|\bvat\b|\btax(es)?\b/i, true]
+  ];
+  const infoOf = q => { const asks = ASKS.test(q), hit = INFO.find(i => i[1].test(q) && (asks || !i[2])); return hit ? hit[0] : null; };
   function intentOf(raw, state, at) {
-    const q = latin(raw).trim(), b = state.booking;
+    const q = norm(raw).trim(), b = state.booking;
     if (RE.card.test(q)) return { intent: 'card' };
     const rm = q.match(RE.room);
     if (RE.access.test(q) && ((rm && (!b || rm[1] !== b.room)) || RE.third.test(q))) return { intent: 'other_room', room: rm ? rm[1] : undefined };
@@ -61,6 +103,8 @@
     const brief = q.split(/\s+/).length <= 2;                               // a bare yes or no answers what the agent just offered
     if (state.pending && brief && RE.yes.test(q)) return { intent: 'choice', v: true };
     if (state.pending && brief && RE.no.test(q)) return { intent: 'choice', v: false };
+    const topic = infoOf(q);
+    if (topic) return { intent: 'info', topic };
     if (RE.keyWant.test(q)) return { intent: 'give_key', via: /email|e-mail|بريد|[إا]يميل/i.test(q) ? 'email' : /\bcard\b|بطاقة/i.test(q) ? 'card' : /sms|رسالة|جوال/i.test(q) ? 'sms' : null };
     if (RE.price.test(q)) return { intent: 'price' };
     if (RE.refund.test(q)) return { intent: 'refund' };
@@ -92,7 +136,7 @@
     refund: new RegExp(NO + '(?:تلغ|تسترجع|ترجع|استرجاع|[إا]لغاء|cancel|refund)', 'i'),
     comp: new RegExp(NO + '(?:تعو[ّ]?ض|تعويض|compensat)', 'i')
   };
-  const pieces = raw => latin(raw).split(SPLIT).map(s => (s || '').trim()).filter(Boolean);
+  const pieces = raw => norm(raw).split(SPLIT).map(s => (s || '').trim()).filter(Boolean);
   /* 'conflict': the message asks for the intent and, in another clause, for its opposite · 'refused': it only asks not to */
   function stance(raw, intent) {
     const neg = NEG[intent]; if (!neg) return 'asked';
@@ -174,6 +218,7 @@
       case 'rates': return call('get_rates', { scope: 'tonight' }, i);
       case 'status': return call('get_room_status', {}, i);
       case 'mine': return call('find_booking', {}, i);
+      case 'info': return Object.assign(say('info', 'answer'), { text: it.topic });
       case 'requests': { const items = splitRequests(input.text); return items.length ? call('route_request', { items }, i) : say('no_requests', i, false); }
     }
     const note = String(input.text).trim().slice(0, 80);
@@ -227,5 +272,5 @@
   }
 
   SILA.brains = SILA.brains || {};
-  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, splitRequests, kindOf, latin });
+  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, splitRequests, kindOf, latin, norm });
 })(typeof window !== 'undefined' ? window : globalThis);

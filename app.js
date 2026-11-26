@@ -1048,6 +1048,12 @@
   async function speak(code, state, ok, text, c = STAGE) {
     const b = c.b;
     switch (code) {
+      case 'info': {                                // answered from the hotel's own data, by the rules: nothing is guessed
+        const t = text === 'checkout' ? POLICIES[0] : text === 'tax' ? POLICIES[1] : text === 'refunds' ? POLICIES[5]
+          : text === 'landmarks' ? __('من المعالم في بيانات الفندق: ') + LANDMARKS.map(c => c[2][0][0] + ' (' + c[0] + ')').join(__('، ')) + __('. التفاصيل في صفحة المعالم.')
+          : __('ليس في بيانات الفندق قائمة بالمطاعم القريبة، ولا أخمّن. خدمة الغرف متاحة لك، وإن أردت توصية فاكتب طلبك وأحوّله للكونسيرج.');
+        return c.bot(t, ok);
+      }
       case 'clarify': return c.bot(fill(__('في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟'), { what: PART[text] || '' }), ok);
       case 'unhandled': return c.bot(fill(__('نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.'), { what: String(text || '').split(',').map(p => PART[p]).filter(Boolean).join(__('، ')) }), ok);
       case 'confirm_no': return c.bot(__('تمام، لم أنفّذ شيئاً.'), ok);
@@ -2237,7 +2243,8 @@
     }
     if (!b && it.intent !== 'prices' && !modelChat()) { drop(); reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
     chatWait = wait;
-    const act = it.intent === 'clean' ? { tool: 'open_ticket', args: { kind: 'clean' }, intent: 'clean' }
+    const brief = it.q.split(/\s+/).length <= 3;
+    const act = !brief ? null : it.intent === 'clean' ? { tool: 'open_ticket', args: { kind: 'clean' }, intent: 'clean' }
       : it.intent === 'maint' ? { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw.trim())) }, intent: 'maint' } : null;
     /* "my booking" and "tonight's rates" are matched by the written rules: instant, and no model quota spent on them */
     if (!await chatTurn(raw, act, it.intent === 'mine' || it.intent === 'prices')) { reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }

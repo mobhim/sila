@@ -2,7 +2,7 @@
    changes anything, one message can hold several requests, and a failing tool does not break the turn.
    No real model is used: the tests answer the API address themselves. */
 import { test, expect } from '@playwright/test';
-import { LANGS, T, watch, open, readStore, bookingOf, arrive, ask, idle, lastTrail, showScreen, playModel, modelReady, ACT, planOf, replyOf, takeOver, enterNumber, sendRequests } from './helpers.mjs';
+import { LANGS, T, watch, open, readStore, bookingOf, arrive, ask, idle, lastTrail, showScreen, playModel, modelReady, ACT, planOf, replyOf, takeOver, enterNumber, sendRequests, noArabic } from './helpers.mjs';
 import { FALSE_AR, FALSE_EN, FINE_AR, FINE_EN } from './claims.cases.mjs';
 
 const A = '1087654321';
@@ -361,6 +361,73 @@ test.describe('E · robustness', () => {
       expect(calls.filter(c => c.task === 'agent').length).toBe(4);                    // two tries, no third
       await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل القواعد', 'Rules brain'));
       await expect(page.locator('#feed .m.bot').last()).toContainText(/\d{3}/);
+    });
+  }
+});
+
+test.describe('F · understanding', () => {
+  test('the rules brain reads Gulf wording and Arabic in Latin letters, and tells a question from a request', async ({ page }) => {
+    await open(page, 'index.html', 'en');
+    const out = await page.evaluate(() => {
+      const { rules } = window.SILA.brains;
+      const b = { room: '412', cat: 'Royal', arrived: true, paid: true, key: 'code', late: false, comp: 0, refunded: false, roomState: 'ready', alt: '414' };
+      const state = { stage: 'stay', waiting: false, pending: null, booking: b, perms: { reissue: true, ticket: true, move: true, late: true, limit: 150 } };
+      const first = text => { const a = rules.next({ input: { type: 'text', text, at: 'stay' }, state, steps: [] }); return a.tool ? a.tool + (a.args.kind ? ':' + a.args.kind : '') : 'say:' + a.say + (a.text ? ':' + a.text : ''); };
+      return ['el mokayef 5arban', 'الغرفة حر مرة ومو قادر أنام', 'المكيف ما يبرد', 'التلفزيون طافي', 'el ghorfa wes5a', 'el bab ma yefta7', 'الكرت ما يشتغل',
+        'en2elni ghorfa thanya', 'بدلوا غرفتي', 'a5ro li el moghadra', 'أخروا لي الخروج', 'floosi raj3ooli', 'abi manashef',
+        'وين أقرب مطعم؟', 'wein a2rab mat3am?', 'is there a restaurant nearby', 'احجز لي طاولة في مطعم', 'متى المغادرة؟', 'what time is check-out', 'وش سياسة الاسترجاع؟', 'what landmarks are near here?', 'كم الضريبة؟'].map(first);
+    });
+    expect(out).toEqual(['open_ticket:maint', 'open_ticket:maint', 'open_ticket:maint', 'open_ticket:maint', 'open_ticket:clean', 'reissue_key', 'reissue_key',
+      'move_room', 'move_room', 'late_checkout', 'late_checkout', 'request_staff_approval', 'route_request',
+      'say:info:restaurants', 'say:info:restaurants', 'say:info:restaurants', 'route_request', 'say:info:checkout', 'say:info:checkout', 'say:info:refunds', 'say:info:landmarks', 'say:info:tax']);
+  });
+
+  for (const lang of LANGS) {
+    test('with no model, a question is answered from the hotel data and nothing is sent to a department · ' + lang, async ({ page }) => {
+      const errors = watch(page);
+      await open(page, 'index.html', lang);
+      await arrive(page, A);
+      await ask(page, T(lang, 'وين أقرب مطعم؟', 'Where is the nearest restaurant?'));
+      await expect(page.locator('#feed .m.bot').last()).toContainText(T(lang, 'قائمة بالمطاعم', 'list of nearby restaurants'));
+      await expect(lastTrail(page).locator('li')).toHaveCount(0);                       // no tool: an answer
+      await ask(page, T(lang, 'متى المغادرة؟', 'What time is check-out?'));
+      await expect(page.locator('#feed .m.bot').last()).toContainText('12:00');
+      await ask(page, T(lang, 'وش المعالم القريبة؟', 'What landmarks are nearby?'));
+      await expect(page.locator('#feed .m.bot').last()).toContainText(T(lang, 'برج المملكة', 'Kingdom Centre'));
+      let s = await readStore(page, lang);
+      expect(s.bookings.find(v => v.id === A).requests.length).toBe(0);
+      expect(s.trail.some(e => e.tool === 'route_request')).toBe(false);
+      await ask(page, 'el mokayef 5arban');                                             // Arabic in Latin letters, on either edition
+      s = await readStore(page, lang);
+      expect(s.tickets.length).toBe(1); expect(s.tickets[0].kind).toBe('maint');
+      if (lang === 'en') await noArabic(page);
+      expect(errors).toEqual([]);
+    });
+
+    test('with a model, a message the rules would file as a request is read by the model first · ' + lang, async ({ page }) => {
+      const said = T(lang, 'ما عندي في بيانات الفندق قائمة مطاعم، وأقدر أحوّل سؤالك للاستقبال.', 'The hotel data holds no list of restaurants; I can pass your question to reception.');
+      const calls = await playModel(page, () => replyOf(said));
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await arrive(page, A);
+      await ask(page, T(lang, 'أبي مطعم زين قريب من هنا', 'I want a good restaurant close to here'));      // the rules alone would send this to the concierge
+      await expect(page.locator('#feed .m.bot').last()).toHaveText(said);
+      expect(calls.filter(c => c.task === 'agent').length).toBe(1);
+      expect((await readStore(page, lang)).trail.some(e => e.tool === 'route_request')).toBe(false);
+    });
+
+    test('the chat window: a longer message goes to the brain, so two requests in it are both handled · ' + lang, async ({ page }) => {
+      await playModel(page, () => planOf(ACT('open_ticket', { kind: 'maint', note: T(lang, 'المكيف لا يعمل', 'AC not working') }), ACT('route_request', { items: [{ request: T(lang, 'مناشف إضافية', 'Extra towels'), dept: 'housekeeping' }] })));
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await page.locator('#helpFab').click();
+      const send = async text => { await page.locator('#helpInput').fill(text); await page.locator('#helpForm button[type="submit"]').click(); };
+      await send(A);
+      await expect(page.locator('#helpFeed .m.bot').last()).toContainText('412');
+      await send(T(lang, 'المكيف خربان وأبي مناشف إضافية بعد', 'The AC is broken and I need extra towels too'));
+      await expect.poll(async () => (await readStore(page, lang)).tickets.length).toBe(1);
+      await expect.poll(async () => (await bookingOf(page, lang, A)).requests).toContain(T(lang, 'مناشف إضافية', 'Extra towels'));
+      await expect(page.locator('#helpFeed .m.trail li')).toHaveCount(2);
     });
   }
 });
