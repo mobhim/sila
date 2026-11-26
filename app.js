@@ -2061,6 +2061,36 @@
     H.flow.step = 'confirm';
     reply(__('أراجع معك: ') + d.name + __('، ') + d.type + __('، ') + nightsText(d.nights) + __('، سعر الليلة ') + rate + __(' ر.س، والإجمالي ') + money(total) + __(' شاملاً الضريبة. أأكّد الحجز؟'), [__('تأكيد الحجز'), __('إلغاء')]);
   }
+  /* in the middle of a booking the guest may greet or ask ("which is best?") instead of answering the step.
+     That is answered, from the hotel's data when a model is there, and the same step is asked again; the booking is not lost. */
+  const ASKING = /[?؟]|^(وش|ايش|إيش|شنو|شو|كيف|ليش|ليه|هل|متى|وين|كم (سعر|يكلف|الفرق)|what|which|how|why|when|where|is |are |can |do |does )/i;
+  function regAside(q) {
+    const step = H.flow && H.flow.step;
+    if (!step || /^(إلغاء|الغاء|cancel)$/i.test(q)) return false;
+    if (step === 'type' && CATS.some(x => q.includes(x.key))) return false;
+    if ((step === 'nights' || step === 'id' || step === 'phone') && /\d/.test(q)) return false;
+    if (step === 'confirm') return ASKING.test(q) && !/تأكيد|confirm/i.test(q);
+    return GREETING.test(q) || ASKING.test(q);
+  }
+  async function regAnswer(raw, q) {
+    let text = '';
+    if (modelChat()) {
+      try {
+        const act = await chatBrain.next({ input: { type: 'text', text: raw.slice(0, 300), shown: redact(raw.slice(0, 300)), at: 'identify' }, state: snapshot(CHATC), steps: [], lang,
+          history: chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })) });
+        if (act && act.say === 'free' && act.text) text = redact(String(act.text)).slice(0, 600);
+      } catch (e) { modelDown(); }
+    }
+    chatClear();
+    if (!text && GREETING.test(q) && !ASKING.test(q)) text = __('أهلاً بك.');
+    if (!text && H.flow.data.type && /سعر|بكم|price|rate|cost|how much/i.test(q)) { const r0 = freeOf(H.flow.data.type)[0]; if (r0) text = H.flow.data.type + ': ' + __('سعر الليلة ') + rateNow(r0) + __(' ر.س') + '.'; }
+    if (!text && H.flow.step === 'type') {            // no model: the choice is laid out from the hotel's own rooms and rates
+      const open = CATS.filter(c => freeOf(c.key).length).map(c => ({ key: c.key, rate: rateNow(freeOf(c.key)[0]) })).sort((a, b) => a.rate - b.rate);
+      if (open.length > 1) text = __('الأقل سعراً الليلة: ') + open[0].key + ' (' + open[0].rate + __(' ر.س') + __(')، والأعلى فئة: ') + open[open.length - 1].key + ' (' + open[open.length - 1].rate + __(' ر.س') + ').';
+    }
+    if (text) helpSay('bot', text);
+    regNext();
+  }
   function regInput(raw, q) {
     const d = H.flow.data, step = H.flow.step;
     if (step === 'name') { if (raw.trim().length < 3 || /\d/.test(q)) return reply(__('اكتب الاسم بالحروف، مثل: محمد العلي.'), [__('إلغاء')]); d.name = raw.trim().slice(0, 40); }
@@ -2275,8 +2305,8 @@
       } else if (H.flow) {
         if (H.flow.name === 'maint') { H.flow = null; chatWait = wait; await chatTurn(raw, { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw)) }, intent: 'maint' }); }
         else {
-          wait.remove();
-          if (H.flow.name === 'reg') regInput(raw, it.q);
+          if (!(H.flow.name === 'reg' && regAside(it.q))) wait.remove();
+          if (H.flow.name === 'reg') { if (regAside(it.q)) { chatWait = wait; await regAnswer(raw, it.q); } else regInput(raw, it.q); }
           else if (H.flow.name === 'event') await eventInput(raw, it.q);
           else if (H.flow.name === 'tour') tourInput(raw, it.q);
         }
