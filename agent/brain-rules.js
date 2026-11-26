@@ -43,7 +43,9 @@
     [/\b(say+ara)\b/gi, 'سيارة'], [/\b(ma[t6]ar)\b/gi, 'مطار'], [/\b(ma[t6]3am|mata3em)\b/gi, 'مطعم'],
     [/\b(wein|wain|ween)\b/gi, 'وين'], [/\b(a[2gq]rab)\b/gi, 'أقرب'], [/\b(th?an[iy]+a|tany+a)\b/gi, 'ثانية']
   ];
-  const norm = s => { let t = latin(s); if (/[a-z]/i.test(t)) for (const [re, word] of ARABIZI) t = t.replace(re, ' ' + word + ' '); return t.replace(/\s+/g, ' '); };
+  const norm = s => {
+    let t = latin(s).replace(/(?<=[\u0621-\u064A]{3})ه(?![\u0621-\u064A])/g, 'ة');      // «الغرفه» is «الغرفة»
+    if (/[a-z]/i.test(t)) for (const [re, word] of ARABIZI) t = t.replace(re, ' ' + word + ' '); return t.replace(/\s+/g, ' '); };
 
   /* ---------- the written rules the prototype already had: requests to departments, and the kind of a problem ---------- */
   const REQ_RULES = [
@@ -71,13 +73,13 @@
     access: /افتح|فتح|[أا]عط|[أا]رسل|[أا]صدر|رمز|مفتاح|كود|دخ[ّ]?لني|\b(open|unlock|key|code|access|enter|let me in)\b/i,
     third: /لصديق|لزميل|لصاحب|لشخص|ل[أا]خي|لزوج|غرفة (صديق|جار|زميل)|غير غرفتي|ليست غرفتي|for (my|a|the) (friend|colleague|brother|sister|wife|husband|guest)|someone else|another guest|(friend|neighbou?r|colleague)['’]?s room|not my room/i,
     keyWant: /([أا]عطني|[أا]رسل|[أا]صدر|[أا]بغى|[أا]بي|[أا]ريد|وين|[أا]ين|هات).{0,24}(مفتاح|رمز|الكود)|\b(give|send|issue|get|want|need|where)\b.{0,30}\b(key|code)\b/i,
-    price: /(?:^|\s)(غي[ّ]?ر|عد[ّ]?ل|خف[ّ]?ض|نز[ّ]?ل|اجعل|خل[ّ]?[يه]?|صف[ّ]?ر)(وا|ي)?\s.{0,24}(سعر|المبلغ|الفاتورة|ال[إا]جمالي)|خصم|تخفيض|مجان|بدون (دفع|مقابل)|discount|(change|lower|reduce|set|edit|override) (the |my )?(price|rate|bill|total)|for free|free of charge|without paying|skip (the )?payment|waive|mark (it |me )?as paid/i,
+    price: /(?:^|\s)[وف]?(غي[ّ]?ر|عد[ّ]?ل|خف[ّ]?ض|نز[ّ]?ل|اجعل|خل[ّ]?[يه]?|صف[ّ]?ر)(وا|ي)?\s.{0,24}(سعر|المبلغ|الفاتورة|ال[إا]جمالي)|خصم|تخفيض|مجان|بدون (دفع|مقابل)|discount|(change|lower|reduce|set|edit|override) (the |my )?(price|rate|bill|total)|for free|free of charge|without paying|skip (the )?payment|waive|mark .{0,24}as paid/i,
     refund: /استرجاع|استرداد|استرجع|استرد[ّ]?|رج[ّ]?ع(وا)? (لي )?(المبلغ|فلوس)|[أا]رجع(وا)? (لي )?(المبلغ|فلوس)|فلوسي|[إا]لغاء الحجز|[أا]لغي|refund|money back|cancel/i,
     comp: /تعويض|عو[ّ]?ضني|عو[ّ]?ضوني|compensat/i,
     move: /انقلني|انقلوني|نقلي|حو[ّ]?لوني|(غي[ّ]?ر|بد[ّ]?ل)(وا)? (لي )?(غرفتي|الغرفة|جناحي|الجناح)|غرفة (ثانية|[أا]خرى|بديلة|غيرها|غير (هذي|هذه|ذي))|جناح (ثاني|[آا]خر|بديل)|move me|change (my|the) room|another room|different room|switch rooms?/i,
     late: /(ت[أا]خير|تمديد|[أا]خ[ّ]?ر(وا)?( لي)?|مد[ّ]?د(وا)?( لي)?) (ال)?(مغادرة|خروج|طلعة|تشيك ?[أا]وت|شيك ?[أا]وت)|مغادرة مت[أا]خرة|[أا]طلع مت[أا]خر|late check-?out|check ?out late|leave later|extend (my )?check-?out/i,
     bill: /فاتورتي|ال[إا]جمالي|كم (علي|المبلغ)|my bill|\btotal\b|how much do i (owe|pay)/i,
-    rates: /سعر|[أا]سعار|بكم|التكلفة|price|\brates?\b|how much|cost/i,
+    rates: /سعر|[أا]سعار|بكم|كم الليلة|التكلفة|price|\brates?\b|how much|cost/i,
     status: /(غرفتي|جناحي|الغرفة|الجناح).{0,20}(جاهز|تجهز|حالة)|جاهزة|is (my|the) (room|suite) ready|room (status|ready)|ready yet/i,
     mine: /حجزي|معلوماتي|بياناتي|\bmy (booking|reservation|details)\b/i,
     yes: /^(نعم|[إا]يه|[إا]ي|[أا]جل|تمام|موافق|طيب|انقلني|[أا]ك[ّ]?د|نف[ّ]?ذ|yes|yep|ok|okay|sure|please do|go ahead|move me|confirm|do it)(\s|[.!،,]|$)/i,
@@ -128,7 +130,7 @@
      This brain acts on one intent per message. It still reads the others, so that it can tell the guest which parts it left
      (they are never dropped silently), and so that "move me, but do not change my room" is asked about instead of carried out. */
   const PARTS = ['refund', 'comp', 'move', 'late', 'code', 'give_key', 'clean', 'maint', 'requests', 'bill', 'rates', 'status'];
-  const SPLIT = /[،,.؛;\n!؟?]+|\s+(?:and|also|plus|then|but|however|though|&|ثم|كمان|وبعدين|بعدين|بس|لكن)\s+|\s+و(?=[\u0621-\u064A])/i;
+  const SPLIT = /[،,.؛;\n!؟?]+|\s+(?:and|also|plus|then|but|however|though|&|w|wa|ثم|كمان|وبعدين|بعدين|بس|لكن)\s+|\s+و(?!ساد|سخ|صخ|قت|صول|جب|رق|ين|اي|احد|ضع|ش\s)(?=[\u0621-\u064A])/i;      // «و» joins two requests, unless it is the first letter of a word
   const NO = '(?:^|\\s)(?:لا|ما|مو|لن|بدون|don[’\']?t|do not|not|never|without|no)\\s+(?:\\S+\\s+){0,2}?';
   const NEG = {
     move: new RegExp(NO + '(?:تنقل|تغي[ّ]?ر|[أا]نتقل|[أا]غي[ّ]?ر|نقل|move|change|switch)', 'i'),

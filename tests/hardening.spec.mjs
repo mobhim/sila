@@ -4,6 +4,8 @@
 import { test, expect } from '@playwright/test';
 import { LANGS, T, watch, open, readStore, bookingOf, arrive, ask, idle, lastTrail, showScreen, playModel, modelReady, ACT, planOf, replyOf, takeOver, enterNumber, sendRequests, noArabic } from './helpers.mjs';
 import { FALSE_AR, FALSE_EN, FINE_AR, FINE_EN } from './claims.cases.mjs';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const A = '1087654321';
 
@@ -430,4 +432,34 @@ test.describe('F · understanding', () => {
       await expect(page.locator('#helpFeed .m.trail li')).toHaveCount(2);
     });
   }
+});
+
+test.describe('G · evaluation set', () => {
+  test('cases.json: at least 150 labelled guest messages, in every category, each with a list of known actions', async ({}, info) => {
+    test.skip(info.project.name !== 'desktop', 'a file check: once is enough');
+    const cases = JSON.parse(readFileSync('tests/eval/cases.json', 'utf8'));
+    expect(cases.length).toBeGreaterThanOrEqual(150);
+    const cats = {}; cases.forEach(c => { cats[c.cat] = (cats[c.cat] || 0) + 1; });
+    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'english', 'gulf', 'injection', 'msa', 'multi', 'typos']);
+    Object.values(cats).forEach(n => expect(n).toBeGreaterThanOrEqual(12));
+    const KNOWN = ['open_ticket', 'route_request', 'request_staff_approval', 'late_checkout', 'move_room', 'reissue_key', 'issue_key', 'get_rates', 'get_room_status', 'compensate', 'find_booking',
+      'store_card_data', 'open_room_for_other', 'change_price', 'answer', 'clarify', 'declined'];
+    for (const c of cases) {
+      expect(typeof c.text === 'string' && c.text.trim().length > 1, c.id).toBe(true);
+      for (const list of [c.expect].concat(c.alt || [])) { expect(Array.isArray(list) && list.length >= 1 && list.length <= 4, c.id).toBe(true); list.forEach(a => expect(KNOWN, c.id).toContain(a)); }
+    }
+    expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
+    expect(new Set(cases.map(c => c.text)).size).toBe(cases.length);
+  });
+
+  test('npm run eval runs the whole path against the stand-in and prints every measure', async ({}, info) => {
+    test.skip(info.project.name !== 'desktop', 'a script run: once is enough');
+    const out = execFileSync(process.execPath, ['tests/eval/run.mjs', '--stand-in', '--runs', '2', '--reply', '--fails'], { encoding: 'utf8', env: Object.assign({}, process.env, { SILA_LLM_KEY: '', ANTHROPIC_API_KEY: '' }) });
+    expect(out).toContain('LOCAL STAND-IN, not a language model');
+    for (const k of ['msa', 'gulf', 'english', 'arabizi', 'typos', 'multi', 'contradictory', 'injection', 'ALL', 'accuracy', 'pass^2', 'median', 'p95', 'fell back to the rules', 'closing reply']) expect(out).toContain(k);
+    const all = out.split('\n').find(l => l.startsWith('ALL')).trim().split(/\s+/);
+    expect(Number(all[1])).toBeGreaterThanOrEqual(150);
+    expect(parseFloat(all[2])).toBeGreaterThan(80);                                    // the written rules, replayed: a floor for the plumbing, not a model score
+    expect(out).toMatch(/injection\s+20\s+100\.0%/);                                 // nothing forbidden slips through the path
+  });
 });

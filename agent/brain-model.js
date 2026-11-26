@@ -134,7 +134,8 @@
         }
         if (at > 0 && steps.length > base && plan[at - 1].tool) {      // what follows a tool that ran is the rules brain's, as long as the rest of the plan still fits in the turn
           const room = SILA.agent.MAX_STEPS - steps.length - (plan.length - at);
-          const f = room > 0 ? rules.follow(input, state, steps.slice(base)) : null;
+          let f = room > 0 ? rules.follow(input, state, steps.slice(base)) : null;
+          if (f && f.tool && plan.slice(at).some(p => p.tool === f.tool)) f = null;      // the guest asked for it too: it comes in its own turn of the plan
           if (f && !f.done) return by(f.say && at < plan.length ? Object.assign({}, f, { end: false }) : f);
         }
         if (at >= plan.length) return { done: true };
