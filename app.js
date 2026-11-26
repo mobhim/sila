@@ -93,7 +93,7 @@
   if (!ADMIN) save();
 
   const VAT = 0.15, STATE = { ready: __('جاهز'), prep: __('قيد التجهيز'), maint: __('صيانة') }, NEXT = { ready: 'prep', prep: 'maint', maint: 'ready' };
-  const TIER = { auto: __('تلقائي'), limit: __('ضمن الحد'), staff: __('موظف'), wait: __('بانتظار موافقة'), ok: __('بموافقة موظف'), no: __('مرفوض'), never: __('ممنوع'), ask: __('تأكيد النزيل') };
+  const TIER = { auto: __('تلقائي'), limit: __('ضمن الحد'), staff: __('موظف'), wait: __('بانتظار موافقة'), ok: __('بموافقة موظف'), no: __('مرفوض'), never: __('ممنوع'), ask: __('بانتظار تأكيد النزيل') };
   const roomOf = b => S.rooms.find(r => r.no === b.room);
   const occupant = no => S.bookings.find(b => b.room === no);
   const altFor = b => { const r = roomOf(b); return r && S.rooms.find(x => x.no !== r.no && x.cat === r.cat && x.state === 'ready' && !occupant(x.no)); };
@@ -744,7 +744,7 @@
     target_unavailable: __('لا غرفة بديلة جاهزة من نفس الفئة'), refunded: __('المبلغ مُسترجع'), no_contact: __('لا وسيلة تواصل على الحجز')
   };
   const verdictOf = e => {                         // [tag class, tag text, plain sentence]
-    if (e.held) return ['ask', TIER.ask, __('اقتراح من النموذج: لا يُنفَّذ قبل تأكيد النزيل')];
+    if (e.held) return ['ask', TIER.ask, __('بانتظار تأكيد النزيل: اقتراح من النموذج، لم يُنفَّذ بعد')];
     if (e.result && e.result.error) return ['no', TIER.no, __('تعذّر التنفيذ: خلل في الأداة')];
     if (e.verdict === 'deny') return e.tier === 'never' ? ['never', TIER.never, WHY[e.code] || WHY.forbidden] : ['no', TIER.no, WHY[e.code] || ''];
     if (e.verdict === 'approve') {
@@ -781,16 +781,51 @@
         tr.ui.end();
       }
     }
+    if (answerHeld(tr, e)) { save(); renderTrail(); }      // the guest's yes or no, written onto the entry that was waiting for it
     if (e.waiting) return;                          // the store keeps the outcome, not the wait
-    const b = tr.who || cur, v = e.kind === 'tool' ? verdictOf(e) : null;
+    const b = tr.who || cur, v = e.kind === 'tool' ? verdictOf(e) : null, held = e.kind === 'tool' && !!e.held;
+    if (held) tr.lastHold = tr.id + ':' + e.n;
     S.trail.unshift({
+      /* a call a model proposed has not been allowed or refused yet: it waits for the guest. The entry says so, and is updated when they answer. */
+      held, hold: held ? tr.lastHold : '', status: held ? 'waiting_guest' : '',
       t: nowTime(), turn: tr.id, src: tr.src, room: b ? b.room : '', guest: b ? mask(b.id) : '', heard: short(tr.heard), intent: tr.intent || '', brain: e.brain || 'rules',
-      kind: e.kind, tool: e.tool || '', say: e.say || '', args: e.tool ? argsText(e.args) : '', verdict: e.verdict || '', tier: e.tier || '', code: e.code || '',
+      kind: e.kind, tool: e.tool || '', say: e.say || '', args: e.tool ? argsText(e.args) : '', verdict: held ? 'held' : e.verdict || '', tier: held ? '' : e.tier || '', code: e.code || '',
       approved: e.approved == null ? null : !!e.approved, amount: e.amount == null ? null : Math.round(e.amount * 100) / 100, tag: v ? v[0] : '', result: (e.result && e.result.note) || ''
     });
     if (S.trail.length > 150) S.trail.length = 150;
     save(); renderTrail();
   }
+  /* ---------- a held call and the guest's answer ----------
+     status: waiting_guest -> confirmed (then the entry carries the real verdict) | waiting_staff | cancelled | lapsed */
+  const HELD_TEXT = () => ({ waiting_guest: __('بانتظار تأكيد النزيل: لم يُنفَّذ بعد'), waiting_staff: __('أكّده النزيل، وهو الآن بانتظار موظف'), confirmed: __('أكّده النزيل'),
+    cancelled: __('ألغاه النزيل: لم يُنفَّذ'), lapsed: __('لم يؤكّده النزيل: لم يُنفَّذ') });
+  const heldEntry = id => (id ? S.trail.find(x => x.hold === id && x.held) : null);
+  function answerHeld(tr, e) {
+    const kept = ((tr.ui || STAGE).session.confirm || []).filter(k => k.hold);
+    if (!kept.length) return false;
+    if (e.kind === 'say' && e.say === 'confirm_no') {
+      let n = 0; kept.forEach(k => { const x = heldEntry(k.hold); if (x && x.status === 'waiting_guest') { x.status = 'cancelled'; x.tag = 'no'; x.verdict = 'cancelled'; x.answered = nowTime(); n++; } });
+      return n > 0;
+    }
+    if (e.kind !== 'tool' || e.intent !== 'confirmed') return false;
+    tr.answered = tr.answered || [];
+    const k = kept.find(i => i.tool === e.tool && (!tr.answered.includes(i.hold) || tr.answering === i.hold));
+    const x = k && heldEntry(k.hold);
+    if (!x) return false;
+    if (!tr.answered.includes(k.hold)) tr.answered.push(k.hold);
+    tr.answering = e.waiting ? k.hold : null;      // a call that goes on to staff is written twice: while it waits, and when they decide
+    const v = verdictOf(e);
+    Object.assign(x, { status: e.waiting ? 'waiting_staff' : 'confirmed', answered: nowTime(), verdict: e.verdict || '', tier: e.tier || '', code: e.code || '', tag: v[0],
+      approved: e.approved == null ? null : !!e.approved, amount: e.amount == null ? null : Math.round(e.amount * 100) / 100, result: (e.result && e.result.note) || '' });
+    return true;
+  }
+  /* a held call the guest neither confirmed nor cancelled before writing something else is dropped: the entry says it never ran */
+  function lapseHeld(list) {
+    let n = 0; (list || []).forEach(k => { const x = heldEntry(k.hold); if (x && x.status === 'waiting_guest') { x.status = 'lapsed'; x.tag = 'no'; x.verdict = 'lapsed'; n++; } });
+    if (n) { save(); renderTrail(); }
+  }
+  /* what the console shows for an entry, in words: the JSON export carries the same */
+  const stateOf = e => (e.kind !== 'tool' ? '' : [TIER[e.tag] || '', e.held ? HELD_TEXT()[e.status] || '' : '', WHY[e.code] || ''].filter(Boolean).join(' · '));
   const argsText = a => { try { return redact(JSON.stringify(a || {})).slice(0, 160); } catch (x) { return ''; } };
   function renderTrail() {
     const ul = $('#trail'); ul.textContent = '';
@@ -801,6 +836,7 @@
       else if (e.kind === 'limit') body.append(__('توقفت: بلغت الحد الأقصى للخطوات في الرسالة.'));
       else body.append(__('ردّ على النزيل'));
       line.append((e.room ? __('الغرفة ') + e.room + ' · ' : '') + __('فهمت: ') + (INTENT_LABEL[e.intent] || INTENT_LABEL.other)
+        + (e.kind === 'tool' && e.held && HELD_TEXT()[e.status] ? ' · ' + HELD_TEXT()[e.status] : '')
         + (e.kind === 'tool' && WHY[e.code] ? ' · ' + WHY[e.code] : '') + ' · ' + (e.brain === 'model' ? __('عقل النموذج') : __('عقل القواعد')));
       body.append(line);
       li.append(el('time', '', e.t), body);
@@ -1038,6 +1074,7 @@
   const broke = (call, ok, c = STAGE) => c.bot(fill(__('تعذّر تنفيذ «{what}» الآن بسبب خلل عندنا، ولم يتغيّر شيء. موظف الاستقبال يستطيع مساعدتك فيه.'), { what: TOOL_LABEL[call.tool] || call.tool }), ok);
   async function closeTurn(c, kept, ok, resumed) {
     if (resumed && !kept.length) return;            // the guest only identified again: what was waiting for them still is
+    lapseHeld(c.session.confirm);
     c.session.confirm = kept.length ? kept : null;
     if (kept.length && ok()) await c.bot(confirmText(kept), ok);
   }
@@ -1107,7 +1144,7 @@
         declined: (call, d) => saidNo(call, d, ok),
         refuse: (call, d) => refuse(call, d, ok),
         failed: call => broke(call, ok),
-        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args }); },
+        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args, hold: tr.lastHold }); },
         speak: (code, state, text) => speak(code, state, ok, text),
         record: e => { if (offer0) { offer0 = false; session.offer = false; } trailAdd(tr, e); },
         onFallback: e => { if (!e || !e.soft) modelDown(); }
@@ -1390,7 +1427,7 @@
   $('#ctaTry').addEventListener('click', () => { takeOver(); toStage(); });
   $('#navCta').addEventListener('click', () => { if (system === 'events') { $('#evStage').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); $('#evBrief').focus({ preventScroll: true }); } else { takeOver(); toStage(); } });
   $('#exportLog').addEventListener('click', () => {
-    const data = { exportedAt: new Date().toISOString(), language: lang, note: __('بيانات تجريبية من محاكاة صلة'), log: store.log, trail: store.trail, approvalsWaiting: store.approvals, tickets: store.tickets, sync: SYNC ? SYNC.state().log : [] };
+    const data = { exportedAt: new Date().toISOString(), language: lang, note: __('بيانات تجريبية من محاكاة صلة'), log: store.log, trail: store.trail.map(e => Object.assign({}, e, { state: stateOf(e) })), approvalsWaiting: store.approvals, tickets: store.tickets, sync: SYNC ? SYNC.state().log : [] };
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), link = el('a');
     link.href = url; link.download = 'sila-log-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -2251,7 +2288,7 @@
         declined: (call, d) => saidNo(call, d, ok, c),
         refuse: (call, d) => refuse(call, d, ok, c),
         failed: call => broke(call, ok, c),
-        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args }); },
+        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args, hold: tr.lastHold }); },
         speak: (code, state, text) => (code === 'flow' ? startFlow(text, raw) : speak(code, state, ok, text, c)),
         record: e => { if (offer0) { offer0 = false; chatSession.offer = false; } if (!tr.who) tr.who = me(); trailAdd(tr, e); },
         onFallback: e => { if (!e || !e.soft) modelDown(); }

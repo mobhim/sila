@@ -340,7 +340,7 @@ test.describe('E · robustness', () => {
       await showScreen(page); await modelReady(page);
       await takeOver(page); await enterNumber(page, A);
       await ask(page, T(lang, 'طيارتي بكرة العصر', 'My flight is tomorrow afternoon'));
-      expect((await bookingOf(page, lang, A)).confirm).toEqual([{ tool: 'late_checkout', args: {} }]);
+      expect((await bookingOf(page, lang, A)).confirm).toMatchObject([{ tool: 'late_checkout', args: {} }]);      // (it also carries the id of its trail entry)
       await page.reload();
       await takeOver(page); await enterNumber(page, A);
       await showScreen(page);
@@ -348,6 +348,8 @@ test.describe('E · robustness', () => {
       await idle(page);
       const b = await bookingOf(page, lang, A);
       expect(b.late).toBe(true); expect(b.confirm).toBeNull();
+      const waited = (await readStore(page, lang)).trail.find(e => e.tool === 'late_checkout' && e.held);      // the entry that was waiting, written before the reload
+      expect([waited.status, waited.verdict]).toEqual(['confirmed', 'allow']);
     });
 
     test('an answer that does not fit is asked for once more, then the rules take the turn · ' + lang, async ({ page }) => {

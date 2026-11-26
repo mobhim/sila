@@ -1021,5 +1021,12 @@ window.SILA_EN = {
   "أهلاً بك. أحجز لك في خمس خطوات قصيرة، والدفع والمفتاح بعدها من شاشة الوصول.": "Welcome. I will book you in five short steps; payment and the key come afterwards on the arrival screen.",
   "ما المطلوب بالضبط؟ اكتب ما الذي تريد إصلاحه أو تنفيذه، مثل: المكيف لا يبرّد، أو أحتاج مناشف.": "What exactly do you need? Tell me what to fix or do, for example: the AC is not cooling, or I need towels.",
   "طلبك السابق ({what}) مسجّل عندنا ويُتابَع، ولم أفتح طلباً جديداً. إن كان عندك شيء آخر فاكتب ما هو.": "Your earlier request ({what}) is registered and being followed up, and I have not opened a new one. If it is something else, tell me what it is.",
-  "طلبك": "your request"
+  "طلبك": "your request",
+  "بانتظار تأكيد النزيل": "Waiting for the guest to confirm",
+  "بانتظار تأكيد النزيل: اقتراح من النموذج، لم يُنفَّذ بعد": "Waiting for the guest to confirm: proposed by the model, not carried out yet",
+  "بانتظار تأكيد النزيل: لم يُنفَّذ بعد": "Waiting for the guest to confirm: not carried out yet",
+  "أكّده النزيل، وهو الآن بانتظار موظف": "Confirmed by the guest; now waiting for a staff member",
+  "أكّده النزيل": "Confirmed by the guest",
+  "ألغاه النزيل: لم يُنفَّذ": "Cancelled by the guest: not carried out",
+  "لم يؤكّده النزيل: لم يُنفَّذ": "Not confirmed by the guest: not carried out"
 };

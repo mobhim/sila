@@ -200,3 +200,65 @@ test.describe('D · vague requests', () => {
     });
   }
 });
+
+for (const lang of LANGS) {
+  test.describe('E · trail wording for a held action · ' + lang, () => {
+    test('a held action reads “waiting for the guest to confirm”, never “allowed”, and takes its real verdict when the guest answers; the console and the export agree', async ({ context, page }) => {
+      const errors = watch(page);
+      let next = planOf(ACT('late_checkout'));
+      await playModel(page, () => next);
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      const admin = await context.newPage();
+      await open(admin, 'admin.html', lang, '#trail');
+      await arrive(page, A);
+      const WAIT = T(lang, 'بانتظار تأكيد النزيل', 'Waiting for the guest to confirm');
+      const held = async tool => (await readStore(page, lang)).trail.find(e => e.tool === tool && e.held);
+
+      await ask(page, T(lang, 'عندي رحلة متأخرة بكرة', 'I have a late flight tomorrow'));
+      await expect(lastTrail(page).locator('li .tag.ask')).toHaveText(WAIT);
+      await expect(lastTrail(page).locator('li small')).toContainText(WAIT);
+      let e = await held('late_checkout');
+      expect([e.verdict, e.status, e.tag, e.tier]).toEqual(['held', 'waiting_guest', 'ask', '']);      // not "allow": nothing was decided to run
+      expect((await bookingOf(page, lang, A)).late).toBe(false);
+      await expect(admin.locator('#trail li').first()).toContainText(WAIT);
+      await expect(admin.locator('#trail li').first().locator('.tag.ask')).toHaveText(WAIT);
+      const exported = async () => {
+        const [download] = await Promise.all([admin.waitForEvent('download'), admin.locator('#exportLog').click()]);
+        const fs = await import('node:fs');
+        return JSON.parse(fs.readFileSync(await download.path(), 'utf8')).trail;
+      };
+      let x = (await exported()).find(v => v.tool === 'late_checkout' && v.held);
+      expect(x.verdict).toBe('held'); expect(x.state).toContain(WAIT);
+
+      await ask(page, T(lang, 'نعم', 'yes'));                                            // the guest confirms: the same entry now carries what the engine decided
+      expect((await bookingOf(page, lang, A)).late).toBe(true);
+      e = await held('late_checkout');
+      expect([e.verdict, e.status, e.tag]).toEqual(['allow', 'confirmed', 'limit']);
+      await expect(admin.locator('#trail li').filter({ hasText: T(lang, 'أكّده النزيل', 'Confirmed by the guest') })).toHaveCount(1);
+      x = (await exported()).find(v => v.tool === 'late_checkout' && v.held);
+      expect(x.verdict).toBe('allow'); expect(x.state).toContain(T(lang, 'أكّده النزيل', 'Confirmed by the guest')); expect(x.state).not.toContain(WAIT);
+
+      next = planOf(ACT('move_room'));                                                 // the guest says no: cancelled, and nothing moved
+      await ask(page, T(lang, 'الغرفة ما عجبتني كثير', 'I do not like this room much'));
+      expect((await held('move_room')).status).toBe('waiting_guest');
+      await ask(page, T(lang, 'لا', 'no'));
+      e = await held('move_room');
+      expect([e.verdict, e.status, e.tag]).toEqual(['cancelled', 'cancelled', 'no']);
+      expect((await bookingOf(page, lang, A)).room).toBe('412');
+      await expect(admin.locator('#trail li').filter({ hasText: T(lang, 'ألغاه النزيل', 'Cancelled by the guest') })).toHaveCount(1);
+
+      next = planOf(ACT('compensate'));                                                // the guest writes something else instead of answering: it lapses
+      await ask(page, T(lang, 'الإزعاج كان كثير أمس', 'There was a lot of noise yesterday'));
+      expect((await held('compensate')).status).toBe('waiting_guest');
+      next = replyOf(T(lang, 'أهلاً بك، في خدمتك.', 'You are welcome, glad to help.'));
+      await ask(page, T(lang, 'خلاص شكراً يعطيك العافية', 'never mind, thank you very much'));
+      e = await held('compensate');
+      expect([e.verdict, e.status]).toEqual(['lapsed', 'lapsed']);
+      expect((await bookingOf(page, lang, A)).comp).toBe(0);
+      expect((await readStore(page, lang)).trail.some(v => v.held && v.verdict === 'allow' && v.status !== 'confirmed')).toBe(false);      // no held entry ever reads "allowed" before a yes
+      if (lang === 'en') { await noArabic(page); await noArabic(admin); }
+      expect(errors).toEqual([]);
+    });
+  });
+}
