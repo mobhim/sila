@@ -280,3 +280,87 @@ for (const lang of LANGS) {
     });
   });
 }
+
+test.describe('E · robustness', () => {
+  test('a tool that throws is one failed step: it is recorded, the guest is told, and the turn carries on', async ({ page }) => {
+    await open(page, 'index.html', 'en');
+    const out = await page.evaluate(async () => {
+      const { agent, brains } = window.SILA, rec = [], told = [], ran = [];
+      const b = { room: '412', cat: 'Royal', arrived: true, paid: true, key: 'code', late: false, comp: 0, refunded: false, roomState: 'ready', alt: null };
+      const state = { stage: 'stay', waiting: false, pending: null, booking: b, perms: { reissue: true, ticket: true, move: true, late: true, limit: 150 } };
+      const facts = () => ({ booking: Object.assign({ total: 3000, hasPhone: true, hasEmail: true, keys: [] }, b), rooms: [{ no: '412', cat: 'Royal', state: 'ready', taken: true }], perms: state.perms });
+      const base = { lang: 'en', snapshot: () => state, facts, alive: () => true, approve: async () => true, refuse: async () => {}, speak: async () => {}, record: e => rec.push(e), failed: async call => { told.push(call.tool); },
+        run: async tool => { ran.push(tool); if (tool === 'open_ticket') throw new Error('the ticket desk is down'); return { ok: true }; } };
+      const two = await agent.turn(Object.assign({}, base, { input: { type: 'text', text: 'x' },
+        brain: { name: 'rules', next: async ({ steps }) => (steps.length === 0 ? { tool: 'open_ticket', args: { kind: 'clean' } } : steps.length === 1 ? { tool: 'late_checkout', args: {} } : { done: true }) } }));
+      const afterTwo = ran.slice(); ran.length = 0;
+      const rules = await agent.turn(Object.assign({}, base, { input: { type: 'text', text: 'the AC is broken' }, brain: brains.rules }));      // the written rules do not apologise for a ticket that never opened
+      return { steps: two.steps.map(s => s.tool + ':' + (s.result.error ? 'error' : s.result.ok ? 'ok' : 'no')), stopped: two.stopped, afterTwo, told, recorded: rec.filter(e => e.result && e.result.error).length,
+        rulesRan: ran.slice(), rulesSteps: rules.steps.length };
+    });
+    expect(out).toEqual({ steps: ['open_ticket:error', 'late_checkout:ok'], stopped: false, afterTwo: ['open_ticket', 'late_checkout'], told: ['open_ticket', 'open_ticket'], recorded: 2, rulesRan: ['open_ticket'], rulesSteps: 1 });
+  });
+
+  for (const lang of LANGS) {
+    test('a reload before payment carries on: requests are not asked for twice · ' + lang, async ({ page }) => {
+      await open(page, 'index.html', lang);
+      await takeOver(page); await enterNumber(page, A);
+      await sendRequests(page, T(lang, 'سرير إضافي', 'extra bed'));
+      await showScreen(page);
+      await expect(page.locator('#panel dl.bill')).toBeVisible();
+      await page.reload();
+      await takeOver(page); await enterNumber(page, A);
+      await showScreen(page);
+      await expect(page.locator('#panel dl.bill')).toBeVisible();                       // straight to payment
+      await expect(page.locator('#reqText')).toHaveCount(0);
+      const b = await bookingOf(page, lang, A);
+      expect(b.reqDone).toBe(true); expect(b.requests.length).toBe(1);
+    });
+
+    test('an offered move and a call waiting for a yes are still there after a reload · ' + lang, async ({ page }) => {
+      let plan = null;
+      await playModel(page, () => plan || 500);
+      await open(page, 'index.html', lang);
+      await arrive(page, A);
+      await ask(page, T(lang, 'المكيف لا يعمل', 'The AC is not working'));               // the model is down: the rules open a ticket and offer a move
+      await showScreen(page);
+      await expect(page.locator('#panel [data-v="move"]')).toBeVisible();
+      await page.reload();
+      await takeOver(page); await enterNumber(page, A);
+      await showScreen(page);
+      await page.locator('#panel [data-v="move"]').click();
+      await idle(page);
+      expect((await bookingOf(page, lang, A)).room).toBe('414');
+
+      plan = planOf(ACT('late_checkout'));
+      await page.reload();                                                              // a fresh page: the model is tried again
+      await showScreen(page); await modelReady(page);
+      await takeOver(page); await enterNumber(page, A);
+      await ask(page, T(lang, 'طيارتي بكرة العصر', 'My flight is tomorrow afternoon'));
+      expect((await bookingOf(page, lang, A)).confirm).toEqual([{ tool: 'late_checkout', args: {} }]);
+      await page.reload();
+      await takeOver(page); await enterNumber(page, A);
+      await showScreen(page);
+      await page.locator('#panel [data-v="yes"]').click();
+      await idle(page);
+      const b = await bookingOf(page, lang, A);
+      expect(b.late).toBe(true); expect(b.confirm).toBeNull();
+    });
+
+    test('an answer that does not fit is asked for once more, then the rules take the turn · ' + lang, async ({ page }) => {
+      let bad = 1;
+      const calls = await playModel(page, (body, n) => (bad-- > 0 ? { actions: 'nonsense' } : planOf(ACT('open_ticket', { kind: 'clean' }))));
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await arrive(page, A);
+      await ask(page, T(lang, 'الحمام يحتاج ترتيب', 'The bathroom needs tidying'));
+      expect(calls.filter(c => c.task === 'agent').length).toBe(2);                    // the second answer was used
+      expect((await readStore(page, lang)).trail.some(e => e.tool === 'open_ticket' && e.brain === 'model')).toBe(true);
+      bad = 99;
+      await ask(page, T(lang, 'كم أسعار الليلة؟', 'What are tonight’s rates?'));
+      expect(calls.filter(c => c.task === 'agent').length).toBe(4);                    // two tries, no third
+      await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل القواعد', 'Rules brain'));
+      await expect(page.locator('#feed .m.bot').last()).toContainText(/\d{3}/);
+    });
+  }
+});

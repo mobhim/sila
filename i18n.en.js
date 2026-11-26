@@ -1008,5 +1008,7 @@ window.SILA_EN = {
   "الأسعار": "the rates",
   "جاهزية الغرفة": "the room’s readiness",
   "في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟": "Your message both asks for and rules out {what}. I did not do anything. Which one do you want?",
-  "نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.": "I handled one request from your message. Still not handled: {what}. Send each one as its own message and I will do it."
+  "نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.": "I handled one request from your message. Still not handled: {what}. Send each one as its own message and I will do it.",
+  "تعذّر التنفيذ: خلل في الأداة": "Could not run: the tool failed",
+  "تعذّر تنفيذ «{what}» الآن بسبب خلل عندنا، ولم يتغيّر شيء. موظف الاستقبال يستطيع مساعدتك فيه.": "I could not carry out “{what}” just now because of a fault on our side, and nothing was changed. Reception can help you with it."
 };

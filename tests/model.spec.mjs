@@ -229,8 +229,9 @@ test.describe('lib/sila-ai.js · agent task', () => {
 
   test('an answer that does not fit the schema, a prose answer, quota and bad requests never reach the page as output', async ({}, info) => {
     test.skip(info.project.name !== 'desktop', 'server code: once is enough');
-    reply = { actions: [Object.assign({}, ticket, { tool: 'delete_all_bookings' })], reply: '' };
+    reply = { actions: [Object.assign({}, ticket, { tool: 'delete_all_bookings' })], reply: '' }; seen = [];
     expect((await post(input())).status).toBe(502);
+    expect(seen.length).toBe(2);                                                      // asked once more, then given up
     reply = 'Sure! I refunded the guest.';
     expect((await post(input())).status).toBe(502);
     reply = '```json\n' + JSON.stringify({ reply: '', mood: 'happy', actions: [{ tool: 'route_request', items: [{ request: 'x', dept: 'kitchen' }, { request: 'towels', dept: 'housekeeping' }], secret: 1 }, { tool: 'fly' }] }) + '\n```';      // loose but usable: tidied

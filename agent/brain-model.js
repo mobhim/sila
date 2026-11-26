@@ -98,12 +98,15 @@
     }
     async function understand(turn) {
       const { input, state } = turn, hotel = o.hotel(), b = state.booking;
-      const out = await o.ask('agent', {
+      const sent = {
         text: input.shown, hotel,
         state: { channel: o.channel === 'chat' ? 'chat' : 'stage', stage: state.stage, pending: state.pending, booking: b ? { room: b.room, category: b.cat, nights: b.nights, arrived: b.arrived, paid: b.paid, key: b.key, late: b.late, comp: !!b.comp, refunded: b.refunded, roomState: b.roomState, alt: !!b.alt } : null },
         history: (turn.history || []).slice(-8).map(t => ({ guest: t.heard || '', agent: t.said || '' }))
-      });
-      return planOf(out, turn, [hotel, b ? b.room : '']);
+      };
+      for (let again = 0; ; again++) {               // an answer that does not fit is asked for once more; after that the rules take the turn
+        const out = await o.ask('agent', sent);
+        try { return planOf(out, turn, [hotel, b ? b.room : '']); } catch (e) { if (e.soft || again) throw e; }
+      }
     }
 
     let wording = true;                             // false once the server turned out not to know the "reply" task

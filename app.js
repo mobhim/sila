@@ -67,7 +67,7 @@
     { id: '1023948576', name: __('فهد العتيبي'), room: '915', nights: 5, eta: '21:00', phone: '0500000915', email: 'guest915@example.com' },
     { id: '1190283746', name: __('نورة القحطاني'), room: '318', nights: 1, eta: '14:00', phone: '0500000318', email: 'guest318@example.com' }
   ];
-  const blank = b => ({ ...b, arrivedAt: null, requests: [], paid: false, key: null, via: null, comp: 0, late: false, refunded: false });
+  const blank = b => ({ ...b, arrivedAt: null, requests: [], paid: false, key: null, via: null, comp: 0, late: false, refunded: false, reqDone: false, offer: false, confirm: null });
   const freshState = () => ({
     rooms: ROOMS0.map(r => ({ ...r })), bookings: BOOK0.map(blank),
     perms: { reissue: true, ticket: true, move: true, late: true, limit: 150, priceMin: 25, priceMax: 40 },
@@ -650,8 +650,12 @@
      Everything the brain is shown comes from snapshot(), and everything the engine decides on comes from factsFor(): both are
      built here from the hotel's data, never from what the guest typed. */
   const fill = (s, o) => s.replace(/\{(\w+)\}/g, (m, k) => (o[k] == null ? '' : o[k]));
-  const session = { reqDone: false, waiting: false, offer: false, confirm: null };
-  const resetSession = () => { session.reqDone = false; session.waiting = false; session.offer = false; session.confirm = null; };
+  /* where the guest is in the arrival lives on the booking itself, so a page that reloads carries on from the same place:
+     whether the requests were asked for, an offered move still on the table, and a call waiting for the guest's yes.
+     Only "waiting for the room" belongs to the open page. */
+  const onBooking = (k, empty) => ({ get: () => (cur && cur[k]) || empty, set: v => { if (cur && (cur[k] || empty) !== (v || empty)) { cur[k] = v || empty; save(); } }, enumerable: true });
+  const session = Object.defineProperties({ waiting: false }, { reqDone: onBooking('reqDone', false), offer: onBooking('offer', false), confirm: onBooking('confirm', null) });
+  const resetSession = () => { session.waiting = false; };
   /* the agent serves two surfaces with the same tools: the guest screen and the chat window. Each has its own booking, its own
      offer on the table and its own place to speak; a tool is handed the surface its turn belongs to (the chat's is CHATC, below). */
   const STAGE = {
@@ -741,6 +745,7 @@
   };
   const verdictOf = e => {                         // [tag class, tag text, plain sentence]
     if (e.held) return ['ask', TIER.ask, __('اقتراح من النموذج: لا يُنفَّذ قبل تأكيد النزيل')];
+    if (e.result && e.result.error) return ['no', TIER.no, __('تعذّر التنفيذ: خلل في الأداة')];
     if (e.verdict === 'deny') return e.tier === 'never' ? ['never', TIER.never, WHY[e.code] || WHY.forbidden] : ['no', TIER.no, WHY[e.code] || ''];
     if (e.verdict === 'approve') {
       if (e.waiting) return ['wait', TIER.wait, __('يتجاوز صلاحياتي: بانتظار موظف')];
@@ -1029,7 +1034,9 @@
   }).join(__(' و', 'and'));
   const confirmText = list => fill(__('قبل أن أنفّذ: هل تريد {what}؟ اكتب «نعم» للتأكيد أو «لا» للإلغاء.'), { what: confirmWhat(list) });
   /* the end of a turn: what the turn kept for confirmation replaces whatever was kept before, and the guest is asked once */
-  async function closeTurn(c, kept, ok) {
+  const broke = (call, ok, c = STAGE) => c.bot(fill(__('تعذّر تنفيذ «{what}» الآن بسبب خلل عندنا، ولم يتغيّر شيء. موظف الاستقبال يستطيع مساعدتك فيه.'), { what: TOOL_LABEL[call.tool] || call.tool }), ok);
+  async function closeTurn(c, kept, ok, resumed) {
+    if (resumed && !kept.length) return;            // the guest only identified again: what was waiting for them still is
     c.session.confirm = kept.length ? kept : null;
     if (kept.length && ok()) await c.bot(confirmText(kept), ok);
   }
@@ -1076,7 +1083,8 @@
     }
     const tr = trailStart(input), who0 = cur;
     saying = [];
-    let offer0 = session.offer;                     // an offer on the table is answered by this turn, whatever the guest says
+    const resumed = input.type === 'event' && input.name === 'identify';
+    let offer0 = !resumed && session.offer;         // an offer on the table is answered by this turn, whatever the guest says
     let out = { steps: [] };
     const kept = [], brain = !auto && modelOn() && input.type === 'text' ? modelBrain : RULES;
     STAGE.buf = brain === RULES ? null : [];
@@ -1088,13 +1096,14 @@
         approve: (call, d) => askStaff(call, d, ok),
         declined: (call, d) => saidNo(call, d, ok),
         refuse: (call, d) => refuse(call, d, ok),
+        failed: call => broke(call, ok),
         hold: (call, d) => { kept.push({ tool: call.tool, args: d.args }); },
         speak: (code, state, text) => speak(code, state, ok, text),
         record: e => { if (offer0) { offer0 = false; session.offer = false; } trailAdd(tr, e); },
         onFallback: e => { if (!e || !e.soft) modelDown(); }
       });
       if (ok() && STAGE.buf) await wordReply(STAGE, brain, input, out, tr, ok);
-      if (ok()) await closeTurn(STAGE, kept, ok);
+      if (ok()) await closeTurn(STAGE, kept, ok, resumed);
     } finally { turning = false; STAGE.buf = null; }
     const said = saying.join(' '); saying = null;
     if (ok()) remember(cur || who0, tr, out.steps, said);
@@ -2192,6 +2201,7 @@
         approve: (call, d) => askStaff(call, d, ok, c),
         declined: (call, d) => saidNo(call, d, ok, c),
         refuse: (call, d) => refuse(call, d, ok, c),
+        failed: call => broke(call, ok, c),
         hold: (call, d) => { kept.push({ tool: call.tool, args: d.args }); },
         speak: (code, state, text) => (code === 'flow' ? startFlow(text, raw) : speak(code, state, ok, text, c)),
         record: e => { if (offer0) { offer0 = false; chatSession.offer = false; } if (!tr.who) tr.who = me(); trailAdd(tr, e); },

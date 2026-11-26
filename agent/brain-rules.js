@@ -188,7 +188,7 @@
     if (f.say) return f.say === 'no_requests' || f.say === 'room_ready' ? advance(state, steps) : DONE;
     const fr = f.result || {}, fa = f.args || {};
     if (f.tool === 'move_room' && !fr.ok) return input.at === 'readiness' && !said('move_failed') ? say('move_failed', 'wait_room') : DONE;
-    if (fr.denied || fr.held) return DONE;
+    if (fr.denied || fr.held || fr.error) return DONE;
     switch (f.tool) {
       case 'find_booking':
         if (!fa.key || !fr.ok || !b) return DONE;

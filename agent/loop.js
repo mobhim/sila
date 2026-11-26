@@ -10,6 +10,7 @@
      approve(call, d)       resolves true or false when a staff member decides
      speak(code, state)     says one of the page's own sentences
      refuse(call, d)        tells the guest a call was refused
+     failed(call, d, e)     tells the guest a tool broke while it ran; the turn carries on
      hold(call, d)          keeps a call that a model proposed until the guest confirms it (see CONFIRM)
      record(entry)          one line of the agent's trail
      alive()                false once the guest has moved on; the turn stops quietly */
@@ -64,9 +65,15 @@
           if (!o.alive()) return { steps, stopped: true };
           step.approved = !!go;
         }
-        step.result = go ? await o.run(call.tool, d.args, d, { first: n === 0, steps }) : { ok: false, declined: true };
+        let broke = null;
+        if (!go) step.result = { ok: false, declined: true };
+        else {
+          try { step.result = await o.run(call.tool, d.args, d, { first: n === 0, steps }); }
+          catch (e) { broke = e; step.result = { ok: false, error: true }; }      // a tool that throws is one failed step, not a broken turn
+        }
         if (!step.result) step.result = { ok: false };
         o.record(Object.assign({ kind: 'tool' }, step));
+        if (broke && o.failed) await o.failed(call, d, broke);
         if (!go && o.declined) await o.declined(call, d, state);
       }
       steps.push(step);
