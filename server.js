@@ -25,7 +25,7 @@ http.createServer(async (req, res) => {
       const cors = corsHeaders(req.headers.origin);
       if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
       const body = req.method === 'POST' ? await readBody(req) : null;
-      const out = await handleAsk({ method: req.method, body, ip: req.socket.remoteAddress });
+      const out = await handleAsk({ method: req.method, body, ip: req.socket.remoteAddress, check: url.searchParams.get('check') === '1' });
       res.writeHead(out.status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...cors });
       return res.end(JSON.stringify(out.body));
     }
