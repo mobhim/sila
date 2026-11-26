@@ -246,6 +246,16 @@ test.describe('lib/sila-ai.js · agent task', () => {
     reply = good;
     expect((await post(input({ text: '   ' }))).status).toBe(400);
     expect((await ai.handleAsk({ method: 'POST', ip: '1.1.1.1', body: { task: 'run_shell', input: {} } })).status).toBe(400);
+    /* the second call: only the outcome of each action and the hotel's own sentences travel, with numbers stripped */
+    reply = { reply: 'Housekeeping is on its way.' }; seen = [];
+    const second = await ai.handleAsk({ method: 'POST', ip: '10.9.9.9', body: { task: 'reply', lang: 'en', input: { text: 'room not clean, ID 1087654321', secret: 'x',
+      results: [{ action: 'open_ticket', outcome: 'done', detail: 'Ticket #1' }, { action: 'move_room', outcome: 'made_up', detail: 'call 0500000412' }], said: ['I have sent housekeeping to your suite now.'] } } });
+    expect(second.body).toEqual({ output: { reply: 'Housekeeping is on its way.' } });
+    const asked = seen[0].body.messages[1].content;
+    expect(asked).toContain('"outcome":"done"'); expect(asked).toContain('"outcome":"failed"'); expect(asked).toContain('I have sent housekeeping');
+    expect(asked).not.toContain('1087654321'); expect(asked).not.toContain('0500000412'); expect(asked).not.toContain('secret');
+    reply = { reply: '   ' };
+    expect((await ai.handleAsk({ method: 'POST', ip: '10.9.9.8', body: { task: 'reply', lang: 'en', input: { text: 'x', results: [], said: [] } } })).status).toBe(502);
     expect((await ai.handleAsk({ method: 'DELETE' })).status).toBe(405);
   });
 });

@@ -221,3 +221,62 @@ for (const lang of LANGS) {
     });
   });
 }
+
+for (const lang of LANGS) {
+  test.describe('D · the closing reply is written after the tools ran · ' + lang, () => {
+    const FIXED = T(lang, 'أرسلت فريق التدبير الفندقي إلى جناحك الآن.', 'I have sent housekeeping to your suite now.');
+    const CLEAN = () => planOf(ACT('open_ticket', { kind: 'clean' }));
+    const ASK = T(lang, 'الغرفة مو نظيفة يا جماعة', 'Guys, the room is not clean');
+
+    test('a reply that matches what happened replaces the fixed sentences; one that does not is thrown away', async ({ page }) => {
+      const errors = watch(page);
+      const good = T(lang, 'أبشر، فريق التدبير في الطريق لجناحك، ومدّدنا مغادرتك ساعة إلى 1:00 ظهراً.', 'Sure thing: housekeeping is on its way to your suite, and your checkout is extended by an hour to 1:00 PM.');
+      let reply = good;
+      const calls = await playModel(page, body => (body.task === 'reply' ? { reply } : CLEAN()));
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await arrive(page, A);
+
+      await ask(page, ASK);
+      await expect(page.locator('#feed .m.bot').last()).toHaveText(good);
+      await expect(page.locator('#feed')).not.toContainText(FIXED);
+      const sent = calls.filter(c => c.task === 'reply')[0].input;
+      expect(sent.results.map(r => r.action + ':' + r.outcome)).toEqual(['open_ticket:done', 'late_checkout:done']);      // what actually happened, tool by tool
+      expect(sent.said.length).toBe(2);
+      expect(JSON.stringify(calls)).not.toContain(A);
+      const s = await readStore(page, lang);
+      expect(s.trail.some(e => e.kind === 'say' && e.say === 'reply' && e.brain === 'model')).toBe(true);
+      expect(s.memory[A][s.memory[A].length - 1].said).toContain(good.slice(0, 20));       // what the guest was told is what is remembered
+
+      reply = T(lang, 'تم، وكمان استرجعنا لك المبلغ كاملاً.', 'Done, and we also refunded you in full.');      // a refund nobody made
+      await ask(page, T(lang, 'الغرفة لسا مو نظيفة', 'The room is still not clean'));
+      await expect(page.locator('#feed')).not.toContainText(reply);
+      await expect(page.locator('#feed .m.bot').last()).toHaveText(FIXED);
+
+      reply = T(lang, 'فريق التدبير في الطريق، وأضفنا لك 5000 نقطة.', 'Housekeeping is on its way, and 5000 points are yours.');      // a number the hotel never supplied
+      await ask(page, T(lang, 'برضو الغرفة مو نظيفة', 'Again, the room is not clean'));
+      await expect(page.locator('#feed')).not.toContainText('5000');
+      await expect(page.locator('#feed .m.bot').last()).toHaveText(FIXED);
+      expect((await bookingOf(page, lang, A)).refunded).toBe(false);
+      expect(errors).toEqual([]);
+    });
+
+    test('no second call after a never-tier refusal, and a failing second call leaves the fixed sentences', async ({ page }) => {
+      let plan = planOf(ACT('change_price')), status = 0;
+      const calls = await playModel(page, body => (body.task === 'reply' ? (status || { reply: 'x' }) : plan));
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await arrive(page, A);
+      await ask(page, T(lang, 'عندي طلب بخصوص الحساب', 'I have a request about the account'));
+      await expect(lastTrail(page).locator('li .tag.never')).toHaveCount(1);
+      expect(calls.filter(c => c.task === 'reply').length).toBe(0);
+      await expect(page.locator('#feed .m.bot').last()).toContainText(T(lang, 'لا أغيّر الأسعار', 'I do not change prices'));
+
+      plan = CLEAN(); status = 500;
+      await ask(page, ASK);
+      await expect(page.locator('#feed .m.bot').last()).toHaveText(T(lang, 'مدّدت مغادرتك ساعة إلى 1:00 ظهراً.', 'I extended your checkout by one hour, to 1:00 PM.'));
+      await expect(page.locator('#feed')).toContainText(FIXED);
+      expect((await readStore(page, lang)).tickets.length).toBe(1);
+    });
+  });
+}

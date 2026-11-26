@@ -655,9 +655,35 @@
   /* the agent serves two surfaces with the same tools: the guest screen and the chat window. Each has its own booking, its own
      offer on the table and its own place to speak; a tool is handed the surface its turn belongs to (the chat's is CHATC, below). */
   const STAGE = {
-    stage: true, get b() { return cur; }, set b(v) { cur = v; }, session,
-    bot: (t, ok, x) => bot(t, ok, x), push: n => push(n), panel: (...n) => setPanel(...n), hint: (t, tone) => hint(t, tone), phase: p => setPhase(p), showRoom: (r, ok) => showRoom(r, ok), end: () => toEnd()
+    stage: true, get b() { return cur; }, set b(v) { cur = v; }, session, buf: null,
+    bot: (t, ok, x) => (STAGE.buf ? keep(STAGE, { t, x }, ok) : bot(t, ok, x)), push: n => (STAGE.buf ? (keep(STAGE, { node: n }), n) : push(n)), put: n => push(n), panel: (...n) => setPanel(...n), hint: (t, tone) => hint(t, tone), phase: p => setPhase(p), showRoom: (r, ok) => showRoom(r, ok), end: () => toEnd()
   };
+  /* When the model brain runs a turn, what the agent would say is kept back until the tools have finished. The model is then
+     asked to word one closing reply from what actually happened; if that reply passes the checks it is shown in place of the
+     fixed sentences, and otherwise they are shown as written. Nothing is kept back while a staff member is being waited for. */
+  const keep = (c, m, ok) => { c.buf.push(m); return ok ? ok() : true; };
+  async function release(c, ok) {
+    const list = c.buf || []; c.buf = null;
+    for (const m of list) { if (m.node) c.put(m.node); else if (!await c.bot(m.t, ok, m.x)) return false; }
+    return true;
+  }
+  async function wordReply(c, brain, input, out, tr, ok) {
+    const list = c.buf || [], steps = out.steps || [], lines = list.filter(m => m.t);
+    const planned = steps.filter(s => s.tool && s.brain === 'model');
+    let text = null;
+    if (lines.length && brain && brain.compose && modelOn() && planned.some(s => !s.held)
+      && !steps.some(s => s.say === 'free' || (s.verdict === 'deny' && s.tier === 'never'))) {      // a never-tier refusal is said in the hotel's own words, always
+      try { text = await brain.compose({ input, steps, said: lines.map(m => m.t), facts: c.b ? c.b.room : '' }); } catch (e) { modelDown(); }
+    }
+    if (!text || !ok()) return release(c, ok);
+    c.buf = null;
+    const extras = lines.map(m => m.x).filter(Boolean), box = extras.length > 1 ? el('div') : extras[0];
+    if (extras.length > 1) box.append(...extras);
+    trailAdd(tr, { kind: 'say', n: steps.length, say: 'reply', intent: tr.intent, brain: 'model' });
+    if (!await c.bot(redact(text), ok, box)) return false;
+    list.forEach(m => { if (m.node) c.put(m.node); });
+    return true;
+  }
   /* card numbers never stay in a message, a log or a model call; identity and mobile numbers are cut to their last four digits */
   const redact = t => String(t).replace(/\b\d{13,19}\b|\b\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{1,7}\b/g, __('[رقم بطاقة محذوف]')).replace(/(^|\D)(?:[12]\d{5}|05\d{4})(\d{4})(?=\D|$)/g, '$1••••••$2');
 
@@ -733,7 +759,7 @@
     const box = el('div', 'm trail'), head = el('div', 'trail-head');
     head.append(el('span', '', __('مسار الوكيل')), tr.brainTag = el('small', '', ''));
     tr.under = el('p', 'trail-got'); tr.list = el('ol');
-    box.append(head, tr.under, tr.list); tr.node = box; tr.ui.push(box);
+    box.append(head, tr.under, tr.list); tr.node = box; tr.ui.put(box);
   }
   function trailAdd(tr, e) {
     if (e.intent && !tr.intent) tr.intent = e.intent;
@@ -961,6 +987,7 @@
     const refund = call.tool === 'request_staff_approval';
     c.panel(busyPanel(refund ? __('بانتظار قرار الموظف…') : __('بانتظار موافقة الموظف…'))); c.hint(__('الطلب الآن عند موظف الاستقبال في لوحة الإدارة.'), 'warn');
     if (!await c.bot(refund ? __('الاسترجاع الكامل خارج صلاحياتي دائماً. حوّلت طلبك لموظف الاستقبال مع ملخص حالتك.') : __('هذا الإجراء خارج صلاحياتي الحالية. أرسلته للموظف مع ملخص الحالة.'), ok)) return false;
+    if (c.buf && !await release(c, ok)) return false;      // the guest must read this now, not after the staff member has answered
     const yes = await approval(approvalText(call, d, c.b));
     c.hint(''); return ok() ? yes : false;
   }
@@ -1051,10 +1078,11 @@
     saying = [];
     let offer0 = session.offer;                     // an offer on the table is answered by this turn, whatever the guest says
     let out = { steps: [] };
-    const kept = [];
+    const kept = [], brain = !auto && modelOn() && input.type === 'text' ? modelBrain : RULES;
+    STAGE.buf = brain === RULES ? null : [];
     try {
       out = await AG.agent.turn({
-        input, lang, brain: !auto && modelOn() && input.type === 'text' ? modelBrain : RULES, fallback: RULES,
+        input, lang, brain, fallback: RULES,
         snapshot, facts: () => factsFor(cur), history: () => historyOf(cur), alive: ok,
         run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok),
         approve: (call, d) => askStaff(call, d, ok),
@@ -1065,8 +1093,9 @@
         record: e => { if (offer0) { offer0 = false; session.offer = false; } trailAdd(tr, e); },
         onFallback: e => { if (!e || !e.soft) modelDown(); }
       });
+      if (ok() && STAGE.buf) await wordReply(STAGE, brain, input, out, tr, ok);
       if (ok()) await closeTurn(STAGE, kept, ok);
-    } finally { turning = false; }
+    } finally { turning = false; STAGE.buf = null; }
     const said = saying.join(' '); saying = null;
     if (ok()) remember(cur || who0, tr, out.steps, said);
     return out;
@@ -2123,8 +2152,9 @@
   let chatWait = null;                            // the three dots shown while the agent works
   const chatClear = () => { if (chatWait) { chatWait.remove(); chatWait = null; } };
   const CHATC = {
-    stage: false, get b() { return me(); }, set b(v) { H.who = v ? v.id : null; }, session: chatSession,
+    stage: false, get b() { return me(); }, set b(v) { H.who = v ? v.id : null; }, session: chatSession, buf: null,
     async bot(text, ok, extra) {
+      if (CHATC.buf) return keep(CHATC, { t: text, x: extra }, ok);
       chatClear();
       const t = el('div', 'm bot typing'); t.append(el('i'), el('i'), el('i')); helpFeed.append(t); chatEnd();
       await sleep(Math.min(800, 280 + text.length * 6)); t.remove();
@@ -2132,7 +2162,8 @@
       chips(baseChips()); chatEnd();
       return ok();
     },
-    push(node) { chatClear(); helpFeed.append(node); chatEnd(); return node; },
+    push(node) { return CHATC.buf ? (keep(CHATC, { node }), node) : CHATC.put(node); },
+    put(node) { chatClear(); helpFeed.append(node); chatEnd(); return node; },
     panel() {}, hint() {}, phase() {}, showRoom: async () => {}, end: chatEnd
   };
   const CHAT_OWN = ['logout', 'askid', 'register', 'tour', 'opendoc', 'event', 'available'];
@@ -2150,10 +2181,11 @@
     /* a button that names the job ("clean my room") starts the turn with that tool; what follows is the rules brain's, as on the guest screen */
     const fixed = firstAct && { name: 'rules', next: t => (t.steps && t.steps.length ? RULES.next(t) : firstAct) };
     let offer0 = chatSession.offer, out = { steps: [] };
-    const kept = [];
+    const kept = [], brain = fixed || (modelChat() && !plain ? chatBrain : RULES);
+    c.buf = brain === chatBrain ? [] : null;
     try {
       out = await AG.agent.turn({
-        input, lang, brain: fixed || (modelChat() && !plain ? chatBrain : RULES), fallback: RULES,
+        input, lang, brain, fallback: RULES,
         snapshot: () => snapshot(c), facts: () => factsFor(c.b), alive: ok,
         history: () => chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })),
         run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok, c),
@@ -2166,6 +2198,8 @@
         onFallback: e => { if (!e || !e.soft) modelDown(); }
       });
     } catch (e) { out = { steps: [] }; }
+    if (c.buf) await wordReply(c, brain, input, out, tr, ok);
+    c.buf = null;
     await closeTurn(c, kept, ok);
     if (kept.length) chips([__('نعم'), __('لا')]);
     chatClear();

@@ -12,6 +12,8 @@
    - It only ever proposes. The permission engine decides, amounts are computed by the page, and a room is the hotel's choice.
    - Free text is read before it is shown: its numbers must come from the hotel's data (grounded), and it may not say
      that something was done, approved, refunded, moved, issued, opened, cancelled or compensated (agent/claims.js).
+   - After the tools have run it is asked once more (task "reply") to word the closing reply from what actually happened.
+     That text replaces the page's fixed sentences only if it passes the same two checks against this turn's steps.
    If the server is down, slow, out of quota or answers with something that does not fit, next() throws and the loop
    carries on with the rules brain in the same turn. */
 (root => {
@@ -104,8 +106,21 @@
       return planOf(out, turn, [hotel, b ? b.room : '']);
     }
 
+    let wording = true;                             // false once the server turned out not to know the "reply" task
+    const outcome = s => (s.held ? 'waiting_for_guest' : s.result && s.result.ok ? 'done' : s.result && s.result.denied ? 'refused' : s.result && s.result.declined ? 'declined_by_staff' : 'failed');
     return {
       name: 'model',
+      /* the closing reply, in the guest's own language and dialect. t: { input, steps, said: the page's fixed sentences, facts }
+         -> the text, or null when the fixed sentences should be used */
+      async compose(t) {
+        if (!wording) return null;
+        const results = t.steps.filter(s => s.tool).map(s => ({ action: s.tool, outcome: outcome(s), detail: String((s.result && s.result.note) || s.code || '') }));
+        let out;
+        try { out = await o.ask('reply', { text: t.input.shown, results, said: t.said }); }
+        catch (e) { if (/ 400$/.test(String(e && e.message))) { wording = false; return null; } throw e; }      // a server one version behind: the fixed sentences stay
+        const text = String((out && out.reply) || '').trim().slice(0, 600);
+        return text && grounded(text, [t.said, results, t.facts]) && SILA.claims.check(text, t.steps).ok ? text : null;
+      },
       async next(turn) {
         const { input, state } = turn, steps = turn.steps || [];
         if (!steps.length) plan = null;
