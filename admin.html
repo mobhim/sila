@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preload" href="fonts/thmanyah-serif-display-regular.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/thmanyah-serif-display-black.woff2?v=2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=17">
+<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body data-page="admin">
 <div class="adm" dir="rtl" lang="ar">
@@ -52,6 +52,20 @@
           <div class="appr" id="appr"></div>
           <h2>بلاغات التنظيف والصيانة</h2>
           <div class="appr" id="tickets"></div>
+        </div>
+        <div class="box">
+          <h2 data-en="Direct bookings">الحجز المباشر</h2>
+          <p class="cap" data-en="What the assistant booked by itself, and what that saved in booking-site commission.">ما حجزه المساعد بنفسه، وما وفّره من عمولة منصات الحجز.</p>
+          <dl class="deal-stats">
+            <div><dt data-en="Bookings closed">حجوزات أقفلها</dt><dd id="dCount">0</dd></div>
+            <div><dt data-en="Their value">قيمتها</dt><dd id="dValue">0</dd></div>
+            <div><dt data-en="Commission saved">عمولة وفّرها</dt><dd id="dSaved">0</dd></div>
+            <div><dt data-en="Discounts given">خصومات منحها</dt><dd id="dGiven">0</dd></div>
+            <div class="net"><dt data-en="Net gain">الصافي لك</dt><dd id="dNet">0</dd></div>
+          </dl>
+          <p class="cap" id="dNote"></p>
+          <h2 data-en="Lost opportunities">فرص ضائعة</h2>
+          <ul class="deal-lost" id="dLost"></ul>
         </div>
         <div class="box">
           <h2>لوحة الغرف</h2>
@@ -118,6 +132,16 @@
         <div class="perm fixed ask"><b>بموافقة موظف دائماً</b><span>الاسترجاع الكامل للمبلغ</span></div>
         <div class="perm fixed never"><b>ممنوع دائماً</b><span>بيانات البطاقات، فتح غرفة لغير صاحب الحجز، تغيير الأسعار</span></div>
       </div>
+      <div class="box">
+        <h2 data-en="Direct booking and haggling">الحجز المباشر والتفاوض</h2>
+        <p class="cap" data-en="When someone asks for a better price while booking, the assistant offers half of your limit first, then all of it, and never more.">حين يطلب العميل سعراً أفضل أثناء الحجز، يعرض المساعد نصف حدّك أولاً، ثم الحد كاملاً، ولا يتجاوزه أبداً.</p>
+        <label class="perm"><span data-en="Allow haggling over the price">السماح بالتفاوض على السعر</span><input type="checkbox" id="dOn"></label>
+        <label class="perm"><span data-en="Largest discount %">أقصى خصم %</span><input type="number" id="dMax" min="0" max="50" step="1" inputmode="numeric"></label>
+        <label class="perm"><span data-en="Discount from how many nights">الخصم يبدأ من كم ليلة</span><input type="number" id="dNights" min="1" max="30" step="1" inputmode="numeric"></label>
+        <label class="perm"><span data-en="Free late check-out to close a booking">مغادرة متأخرة مجاناً لإقفال الحجز</span><input type="checkbox" id="dPerk"></label>
+        <label class="perm"><span data-en="Booking-site commission % (for the savings figure)">عمولة منصة الحجز % (لحساب التوفير)</span><input type="number" id="dOta" min="0" max="40" step="1" inputmode="numeric"></label>
+        <div class="perm fixed never"><b data-en="Never">ممنوع دائماً</b><span data-en="A price under your limit, or a change to the price after the booking is made">سعر تحت حدّك، أو تغيير السعر بعد إتمام الحجز</span></div>
+      </div>
     </section>
 
     <section class="pane" data-pane="trail" hidden>
@@ -156,6 +180,6 @@
     if (l === 'en') document.write('<script src="i18n.en.js?v=14"><\/script>');
   })();
 </script>
-<script src="app.min.js?v=22"></script>
+<script src="app.min.js?v=23"></script>
 </body>
 </html>

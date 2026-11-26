@@ -657,3 +657,16 @@ html[data-theme="dark"] .foot-link{color:var(--lime)}
 .room-in.wide{width:auto;min-width:150px;padding-inline:8px;text-align:start;direction:inherit}
 label.f > span{display:block}
 label.f select{height:42px;border-radius:12px;border:1px solid var(--stroke-2);background:var(--surface);color:var(--ink);padding:0 12px;font-size:14.5px;min-width:0;width:100%}
+
+/* direct booking: the figures the owner reads first, and who walked away */
+.deal-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
+.deal-stats div{border:1px solid var(--stroke);border-radius:14px;padding:10px 12px;min-width:0}
+.deal-stats dt{font-size:12.5px;color:var(--muted)}
+.deal-stats dd{margin:2px 0 0;font-family:var(--f-display);font-size:20px;direction:ltr;text-align:start}
+.deal-stats .net{grid-column:1/-1;background:var(--surface-2);border-color:var(--brand)}
+.deal-stats .net dd{font-size:26px;color:var(--brand)}
+.deal-lost{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.deal-lost li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13.5px;border-top:1px solid var(--stroke);padding-top:8px}
+.deal-lost li.cap{display:block;border-top:0;padding-top:0}
+.deal-lost time{color:var(--muted);font-size:12px;direction:ltr}
+.deal-lost small{grid-column:2;color:var(--warn);font-size:12px}

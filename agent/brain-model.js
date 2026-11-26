@@ -25,6 +25,10 @@
     get_room_status: 'status', find_booking: 'mine', store_card_data: 'card', open_room_for_other: 'other_room', change_price: 'price' };
   const FLOW = { start_registration: 'register', plan_event: 'event', book_tour: 'tour' };
   const MAX_ACTIONS = 4;
+  /* a short message that urges and names nothing new: "fix it quickly", "صلحوها بسرعة" */
+  const pressing = t => { const s = String(t || '').trim(); return s.split(/\s+/).length <= 3 && URGE.test(s); };
+  /* did the guest's own words ask for their money back? If not, a refund request the model read into them is put to the guest first */
+  const REFUND_SAID = /استرجاع|استرداد|استرجع|استرد|رج[ّ]?ع|[أا]رجع|فلوس|[إا]لغاء|[أا]لغ[يو]|refund|money back|cancel|reimburs/i;
   const URGE = /صلح|بسرع|عج[ّ]?ل|للحين|لسى|لسه|ما ?زال|متى|وين (الفريق|الصيان)|\bfix (it|this|that)\b|hurry|quick|still|\byet\b|\bwhen\b|any update|how long/i;
   const fail = (why, soft) => { throw Object.assign(new Error('model brain: ' + why), { soft: !!soft }); };      // soft: the model answered, but its words were thrown away
 
@@ -75,13 +79,13 @@
       else if (t === 'open_ticket') {
         const kind = a.kind === 'clean' ? 'clean' : 'maint'; intent = kind;
         /* the guest is pressing about a fault that already has an open ticket ("fix it quickly", "still broken"): no second ticket */
-        if (b && (b.tickets || []).includes(kind) && URGE.test(String(input.text || ''))) return by({ say: 'ticket_open', intent: 'answer', end: true });
+        if (b && (b.tickets || []).includes(kind) && pressing(input.text)) return by({ say: 'ticket_open', intent: 'answer', end: true });
         args = kind === 'maint' ? { kind, text: String(a.note || input.shown || '').trim().slice(0, 80) } : { kind };
       } else if (t === 'move_room') {
         if (!b || !b.alt) return by({ say: b ? 'no_alt' : 'need_id', intent: 'move', end: true });
         args = { to: b.alt, why: state.pending === 'move_offer' ? 'maint' : state.pending === 'room_choice' ? 'prep' : 'guest' };      // the room is the hotel's choice, never the model's
       } else if (t === 'compensate') args = Number.isInteger(a.requested) && a.requested > 0 && a.requested <= 100000 ? { requested: a.requested } : {};
-      else if (t === 'request_staff_approval') args = { action: 'refund' };
+      else if (t === 'request_staff_approval') { args = { action: 'refund' }; if (!REFUND_SAID.test(String(input.text || ''))) return { tool: t, args, intent, confirm: true }; }
       else if (t === 'get_rates') { args = { scope: a.scope === 'bill' && b ? 'bill' : 'tonight' }; intent = args.scope === 'bill' ? 'bill' : 'rates'; }
       return { tool: t, args, intent };
     }

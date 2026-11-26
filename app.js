@@ -86,10 +86,14 @@
     { id: '1190283746', name: __('نورة القحطاني'), room: '318', nights: 1, eta: '14:00', phone: '0500000318', email: 'guest318@example.com' }
   ];
   const blank = b => ({ ...b, arrivedAt: null, requests: [], paid: false, key: null, via: null, comp: 0, late: false, refunded: false, reqDone: false, offer: false, confirm: null });
+  /* the owner's limits for direct booking: whether the agent may haggle, how far, from how many nights, what it may add to close,
+     and the commission a booking site would have taken (used only to show what a direct booking saved) */
+  const DEAL0 = { on: true, max: 10, minNights: 2, perk: true, ota: 15 };
   const freshState = () => ({
     rooms: ROOMS0.map(r => ({ ...r })), bookings: BOOK0.map(blank),
     perms: { reissue: true, ticket: true, move: true, late: true, limit: 150, priceMin: 25, priceMax: 40 },
-    pricing: { period: 'auto', pct: null, reason: '', by: 'rules' }, log: [], approvals: [], tickets: [], ticketN: 0, trail: [], memory: {}
+    pricing: { period: 'auto', pct: null, reason: '', by: 'rules' }, log: [], approvals: [], tickets: [], ticketN: 0, trail: [], memory: {},
+    deal: { ...DEAL0 }, lost: []
   });
   const KEY = 'miftah.sim.v4' + (EN ? '.en' : '');      // each language keeps its own sample data, so names and logs never mix
   let store;
@@ -102,6 +106,8 @@
     if (!s.decided || typeof s.decided !== 'object') s.decided = {};
     if (!Array.isArray(s.trail)) s.trail = [];
     if (!s.memory || typeof s.memory !== 'object' || Array.isArray(s.memory)) s.memory = {};
+    if (!s.deal || typeof s.deal !== 'object') s.deal = { ...DEAL0 };
+    if (!Array.isArray(s.lost)) s.lost = [];
     return s;
   };
   shape(store);
@@ -142,7 +148,8 @@
   }
   const rateNow = r => Math.round(r.rate * (1 + pricePct() / 100));
   const bill = b => { const r = roomOf(b), base = b.paid && b.rateBase ? b.rateBase : r ? r.rate : 600, pct = (b.paid || b.quoted) && b.pct != null ? b.pct : pricePct(),       // a paid or quoted price stays fixed
-       rate = Math.round(base * (1 + pct / 100)), sub = rate * b.nights, vat = sub * VAT; return { base, pct, rate, sub, vat, total: sub + vat }; };
+       list = Math.round(base * (1 + pct / 100)), rate = b.disc ? Math.round(list * (1 - b.disc / 100)) : list, sub = rate * b.nights, vat = sub * VAT;      // b.disc: what the agent agreed inside the owner's limit
+    return { base, pct, list, rate, sub, vat, total: sub + vat }; };
   const dateFmt = new Intl.DateTimeFormat(EN ? 'en-GB' : 'ar-SA-u-ca-gregory-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
   const checkout = b => { const d = new Date(); d.setDate(d.getDate() + b.nights); return dateFmt.format(d) + __('، ') + (b.late ? '1:00' : '12:00') + __(' ظهراً'); };
   const nightsText = (n, en = EN) => en ? (n === 1 ? '1 night' : n + ' nights') : n === 1 ? 'ليلة واحدة' : n === 2 ? 'ليلتان' : n <= 10 ? n + ' ليالٍ' : n + ' ليلة';
@@ -487,6 +494,32 @@
   $('#pLimit').addEventListener('change', e => {
     const v = Math.max(0, Math.min(5000, Math.round(Number(e.target.value) || 0))); if (demoOn) takeOver(); S.perms.limit = v; save(); renderPerms();
   });
+  /* ---------- direct booking: the owner's limits, and what the agent's bookings are worth ---------- */
+  const DEAL_IN = { on: '#dOn', perk: '#dPerk', max: '#dMax', minNights: '#dNights', ota: '#dOta' }, DEAL_LIM = { max: [0, 50], minNights: [1, 30], ota: [0, 40] };
+  const LOST_WHY = { below: __('طلب سعراً أقل من الحد'), offer: __('انسحب بعد العرض'), price: __('انسحب بعد معرفة السعر') };
+  function dealNumbers() {
+    const mine = S.bookings.filter(b => b.direct), value = mine.reduce((n, b) => n + bill(b).total, 0);
+    const given = mine.reduce((n, b) => { const t = bill(b); return n + (t.list - t.rate) * b.nights * (1 + VAT); }, 0), saved = value * (Number(S.deal.ota) || 0) / 100;
+    return { count: mine.length, value, given, saved, net: saved - given };
+  }
+  function renderDeal() {
+    if (!$('#dOn')) return;
+    $('#dOn').checked = !!S.deal.on; $('#dPerk').checked = !!S.deal.perk; $('#dMax').value = S.deal.max; $('#dNights').value = S.deal.minNights; $('#dOta').value = S.deal.ota;
+    const n = dealNumbers();
+    $('#dCount').textContent = n.count; $('#dValue').textContent = money(n.value); $('#dSaved').textContent = money(n.saved); $('#dGiven').textContent = money(n.given); $('#dNet').textContent = money(n.net);
+    $('#dNote').textContent = fill(__('العمولة محسوبة على {pct}% كانت ستأخذها منصة الحجز. الحجوزات والمبالغ تجريبية.'), { pct: S.deal.ota });
+    const ul = $('#dLost'); ul.textContent = '';
+    if (!S.lost.length) ul.append(el('li', 'cap', __('لا فرص ضائعة مسجّلة. كل من يسأل عن السعر ثم ينسحب يظهر هنا مع السبب.')));
+    S.lost.slice(0, 8).forEach(x => {
+      const li = el('li'); li.append(el('time', '', x.t), el('span', '', x.type + __('، ') + nightsText(x.nights) + ' · ' + x.rate + __(' ر.س') + (x.disc ? ' · ' + fill(__('عُرض خصم {pct}%'), { pct: x.disc }) : '') + (x.ask ? ' · ' + fill(__('طلب {ask} ر.س'), { ask: x.ask }) : '')), el('small', '', LOST_WHY[x.why] || ''));
+      ul.append(li);
+    });
+  }
+  Object.keys(DEAL_IN).forEach(k => { const n = $(DEAL_IN[k]); if (!n) return; n.addEventListener('change', e => {
+    if (demoOn) takeOver();
+    S.deal[k] = DEAL_LIM[k] ? Math.max(DEAL_LIM[k][0], Math.min(DEAL_LIM[k][1], Math.round(Number(e.target.value) || 0))) : e.target.checked;
+    save(); renderDeal();
+  }); });
   function say(text, tone, undo) {
     msgEl.textContent = text; msgEl.className = 'msg' + (tone ? ' ' + tone : '');
     if (undo) { const u = el('button', 'ghost-btn', __('تراجع')); u.type = 'button'; u.addEventListener('click', undo); msgEl.append(u); }
@@ -569,7 +602,7 @@
     if (heard) save();
   });
   function renderHotel() {
-    renderPerms(); renderPricing(); renderRooms(); renderLog(); renderTrail(); renderSync(); renderAppr(); renderTickets(); renderRows();
+    renderPerms(); renderPricing(); renderRooms(); renderLog(); renderTrail(); renderSync(); renderAppr(); renderTickets(); renderRows(); renderDeal();
     $('#modeNote').textContent = S === store ? __('التسعير، صلاحيات المساعد، حالة الغرف، وكل ما نفّذه. البيانات تجريبية ومحفوظة في متصفحك.') : __('التسعير، صلاحيات المساعد، حالة الغرف، وكل ما نفّذه. العرض يعمل على نسخة مؤقتة تُعاد كل جولة.');
   }
 
@@ -744,7 +777,7 @@
     find_booking: __('البحث عن الحجز'), get_room_status: __('قراءة حالة الغرفة'), get_rates: __('قراءة الأسعار'), check_in: __('تسجيل الوصول'),
     route_request: __('تحويل الطلب للقسم المختص'), issue_key: __('إصدار رمز الدخول'), reissue_key: __('إعادة إصدار رمز الدخول'), open_ticket: __('فتح بلاغ'),
     move_room: __('النقل إلى غرفة من نفس الفئة'), late_checkout: __('تأخير المغادرة'), compensate: __('التعويض ضمن الحد'), request_staff_approval: __('طلب موافقة موظف'),
-    store_card_data: __('حفظ بيانات بطاقة'), open_room_for_other: __('فتح غرفة لغير صاحب الحجز'), change_price: __('تغيير السعر')
+    offer_price: __('عرض سعر عند الحجز'), store_card_data: __('حفظ بيانات بطاقة'), open_room_for_other: __('فتح غرفة لغير صاحب الحجز'), change_price: __('تغيير السعر')
   };
   const INTENT_LABEL = {
     identify: __('النزيل عرّف بنفسه'), no_requests: __('لا طلبات للإقامة'), take_alt: __('اختار الغرفة البديلة'), wait_room: __('اختار انتظار غرفته'),
@@ -753,11 +786,12 @@
     comp: __('يطلب تعويضاً'), move: __('يطلب تغيير الغرفة'), late: __('يطلب تأخير المغادرة'), code: __('رمز الدخول لا يعمل'), clean: __('الغرفة تحتاج تنظيفاً'),
     maint: __('عطل في الغرفة'), bill: __('يسأل عن فاتورته'), rates: __('يسأل عن الأسعار'), status: __('يسأل عن جاهزية غرفته'), mine: __('يسأل عن حجزه'),
     requests: __('طلبات للإقامة'), other: __('ملاحظة للاستقبال'), apology: __('اعتذار عن الإزعاج'), answer: __('سؤال عام يُجاب من بيانات الفندق'), fallback: __('بديل بعد قرار الموظف'), offer_move: __('عرض غرفة بديلة'),
-    paid: __('النزيل أتمّ الدفع'), choice: __('ردّ على عرض المساعد'), confirmed: __('النزيل أكّد الإجراء'), confirm_no: __('النزيل ألغى الإجراء'),
+    paid: __('النزيل أتمّ الدفع'), haggle: __('يطلب سعراً أفضل للحجز'), choice: __('ردّ على عرض المساعد'), confirmed: __('النزيل أكّد الإجراء'), confirm_no: __('النزيل ألغى الإجراء'),
     clarify: __('رسالة تحتاج توضيحاً'), unhandled: __('في الرسالة أكثر من طلب'),
     register: __('يريد التسجيل كنزيل جديد'), event: __('يريد حجز قاعة أو فعالية'), tour: __('يريد جولة استكشافية')
   };
   const WHY = {                                    // why the code said no
+    deal_off: __('التفاوض على السعر غير مفعّل'), min_nights: __('الخصم يبدأ من عدد ليالٍ أكثر'), no_quote: __('لا يوجد سعر معروض بعد'),
     card_data: __('بيانات البطاقات ممنوعة دائماً'), other_room: __('فتح غرفة لغير صاحب الحجز ممنوع دائماً'), other_booking: __('حجز نزيل آخر: ممنوع دائماً'),
     other_category: __('فئة أخرى بسعر آخر: ممنوع دائماً'), price: __('تغيير الأسعار ممنوع دائماً'), unknown_tool: __('أداة غير معروفة'), forbidden: __('ممنوع دائماً'),
     bad_args: __('معطيات لا تطابق مخطط الأداة'), no_booking: __('لا يوجد حجز معرَّف'), not_paid: __('لم يتم الدفع بعد'), room_not_ready: __('الغرفة ليست جاهزة'),
@@ -772,6 +806,7 @@
       if (e.waiting) return ['wait', TIER.wait, __('يتجاوز صلاحياتي: بانتظار موظف')];
       return e.approved ? ['ok', TIER.ok, __('وافق الموظف')] : ['no', TIER.no, __('لم يوافق الموظف')];
     }
+    if (e.tool === 'offer_price') return ['limit', TIER.limit, __('مسموح: ضمن حد الخصم الذي وضعه المالك')];
     return e.tier === 'auto' ? ['auto', TIER.auto, __('مسموح: ينفّذه بنفسه')] : e.tier === 'limit' ? ['limit', TIER.limit, __('مسموح: ضمن حد التعويض')] : ['limit', TIER.limit, __('مسموح: صلاحية فعّلها الفندق')];
   };
   const heardOf = input => (input.type === 'text' ? input.shown : INTENT_LABEL[{ identify: 'identify', no_requests: 'no_requests', room_ready: 'room_ready', paid: 'paid', key_choice: 'key_choice' }[input.name]] || INTENT_LABEL.choice);
@@ -2125,9 +2160,10 @@
     }
     if (step === 'nights') return reply(__('كم ليلة؟'), ['1', '2', '3', '5', '7', __('إلغاء')]);
     input.inputMode = 'text';
-    const r = freeOf(d.type)[0], rate = rateNow(r), total = rate * d.nights * (1 + VAT);
+    const r = freeOf(d.type)[0], list = rateNow(r), rate = d.disc ? Math.round(list * (1 - d.disc / 100)) : list, total = rate * d.nights * (1 + VAT);
     H.flow.step = 'confirm';
-    reply(__('أراجع معك: ') + d.name + __('، ') + d.type + __('، ') + nightsText(d.nights) + __('، سعر الليلة ') + rate + __(' ر.س، والإجمالي ') + money(total) + __(' شاملاً الضريبة. أأكّد الحجز؟'), [__('تأكيد الحجز'), __('إلغاء')]);
+    reply(__('أراجع معك: ') + d.name + __('، ') + d.type + __('، ') + nightsText(d.nights) + __('، سعر الليلة ') + rate + __(' ر.س') + (d.disc ? fill(__(' بعد خصم {pct}%'), { pct: d.disc }) : '')
+      + (d.perk ? __('، مع مغادرة متأخرة إلى 1:00 ظهراً') : '') + __('، والإجمالي ') + money(total) + __(' شاملاً الضريبة. أأكّد الحجز؟'), [__('تأكيد الحجز'), __('إلغاء')]);
   }
   /* in the middle of a booking the guest may greet or ask ("which is best?") instead of answering the step.
      That is answered, from the hotel's data when a model is there, and the same step is asked again; the booking is not lost. */
@@ -2185,6 +2221,50 @@
     if (text) helpSay('bot', text);
     regNext();
   }
+  /* ---------- a better price, asked for while booking ----------
+     The guest haggles; the agent answers with what the owner allows and nothing more. The figure comes from the permission engine
+     (offer_price): the agent cannot go under the owner's limit however it is asked, and every offer is written to the trail. */
+  const HAGGLE = /غالي|غاليه|غالية|خصم|تخفيض|خف[ّ]?ض|نز[ّ]?ل|[آا]خر سعر|[أا]قل سعر|[أا]رخص|راع[يو]?ن[يا]|يصير ب|تعطين[يا] ب|سعر [أا]فضل|سعر [أا]حسن|expensive|pricey|discount|cheaper|best price|better price|lower|too much|\bdeal\b|can you do|\boff\b/i;
+  /* "I'll take it for 700", "أبيه بـ 700": a figure between a third of the rate and the rate, at a step that is not asking for a number */
+  function namesPrice(q, f) {
+    const r = f.data.type && freeOf(f.data.type)[0], m = q.replace(/,/g, '').match(/(?:^|\D)(\d{3,5})(?:\D|$)/);
+    if (!r || !m || ['nights', 'id', 'phone'].includes(f.step)) return false;
+    const n = parseInt(m[1], 10), rate = rateNow(r);
+    return n >= rate * 0.3 && n < rate;
+  }
+  const haggling = q => { const f = H.flow; return !!f && f.name === 'reg' && !/^(إلغاء|الغاء|cancel)$/i.test(q) && (HAGGLE.test(q) || namesPrice(q, f)); };
+  function lostAdd(d, why) {
+    const r = d.type && freeOf(d.type)[0]; if (!r) return;
+    S.lost.unshift({ t: nowTime(), type: d.type, nights: d.nights || 1, rate: rateNow(r), disc: d.disc || 0, ask: d.low || 0, why });
+    if (S.lost.length > 30) S.lost.length = 30;
+    save(); renderDeal();
+  }
+  function regHaggle(raw, q) {
+    const d = H.flow.data, r = d.type && freeOf(d.type)[0];
+    if (!r) { helpSay('bot', __('اختر نوع الغرفة أولاً، وأعطيك أفضل سعر أقدر عليه.')); return regNext(); }
+    if (!d.nights) { helpSay('bot', __('السعر يعتمد على عدد الليالي. قل لي كم ليلة أولاً.')); return regNext(); }
+    const rate = rateNow(r), m = q.replace(/,/g, '').match(/\d{3,5}/), named = m ? parseInt(m[0], 10) : 0, ask = named >= rate * 0.3 && named < rate ? named : 0;
+    d.round = (d.round || 0) + 1;
+    const call = { tool: 'offer_price', args: ask ? { ask } : {} };
+    const v = AG.permissions.decide(call, Object.assign(factsFor(null), { quote: { rate, nights: d.nights, round: d.round, given: d.disc || 0, perk: !!d.perk }, deal: S.deal }));
+    const tr = Object.assign(trailStart({ type: 'text', shown: redact(raw) }), { src: 'chat', ui: CHATC, intent: 'haggle' });
+    let text;
+    if (v.verdict !== 'allow') {
+      text = v.code === 'min_nights' ? fill(__('الخصم متاح للحجز من {n} فأكثر. سعر الليلة {rate} ر.س.'), { n: nightsText(S.deal.minNights), rate }) : fill(__('السعر ثابت الليلة: {rate} ر.س لليلة.'), { rate });
+      trailAdd(tr, { kind: 'tool', n: 0, tool: 'offer_price', args: call.args, verdict: v.verdict, tier: v.tier, code: v.code, brain: 'rules', result: { ok: false, denied: true } });
+    } else {
+      if (v.below) d.low = ask;
+      text = (v.below ? __('السعر اللي ذكرته أقل من المسموح عندي. ') : '')
+        + (v.moved ? fill(__('أقدر أعطيك خصم {pct}%: سعر الليلة يصير {price} ر.س بدل {rate}.'), { pct: v.pct, price: v.amount, rate }) : fill(__('هذا آخر سعر أقدر أعطيه: {price} ر.س لليلة.'), { price: v.amount }))
+        + (v.moved && v.last ? __(' وهذا آخر سعر عندي.') : '') + (v.perk ? __(' ومعه مغادرة متأخرة إلى 1:00 ظهراً بلا مقابل.') : '');
+      d.disc = v.pct; if (v.perk) d.perk = true;
+      trailAdd(tr, { kind: 'tool', n: 0, tool: 'offer_price', args: call.args, verdict: v.verdict, tier: v.tier, code: v.code, amount: v.amount, brain: 'rules',
+        result: { ok: true, note: fill(__('خصم {pct}% من حد {max}%'), { pct: v.pct, max: v.limit }) + (v.perk ? __(' + مغادرة متأخرة') : '') } });
+      if (v.moved) log(fill(__('صلة: عرض خصم {pct}% على {type} ({nights}) ضمن حد {max}%'), { pct: v.pct, type: d.type, nights: nightsText(d.nights), max: v.limit }), 'limit');
+    }
+    helpSay('bot', text);
+    regNext();
+  }
   function regInput(raw, q) {
     const d = H.flow.data, step = H.flow.step;
     if (step === 'name') { if (raw.trim().length < 3 || /\d/.test(q)) return reply(__('اكتب الاسم بالحروف، مثل: محمد العلي.'), [__('إلغاء')]); d.name = raw.trim().slice(0, 40); }
@@ -2208,9 +2288,9 @@
       const r = freeOf(d.type)[0];
       if (!r) { d.type = null; return regNext(); }
       const quote = pricePct();
-      S.bookings.push(Object.assign(blank({ id: d.id, name: d.name, room: r.no, nights: d.nights, eta: nowTime(), phone: d.phone, email: '' }), { pct: quote, quoted: true }));
-      save(); renderRooms(); renderRows(); renderPricing(); refreshScene();
-      log(__('صلة: تسجيل نزيل جديد ') + d.name + ' · ' + d.type + ' ' + r.no, 'auto');
+      S.bookings.push(Object.assign(blank({ id: d.id, name: d.name, room: r.no, nights: d.nights, eta: nowTime(), phone: d.phone, email: '' }), { pct: quote, quoted: true, direct: true, disc: d.disc || 0, late: !!d.perk }));
+      save(); renderRooms(); renderRows(); renderPricing(); refreshScene(); renderDeal();
+      log(__('صلة: حجز مباشر ') + d.name + ' · ' + d.type + ' ' + r.no + (d.disc ? fill(__(' بخصم {pct}% (الحد {max}%)'), { pct: d.disc, max: S.deal.max }) : ''), d.disc ? 'limit' : 'auto');
       H.who = d.id; H.flow = null;
       return reply(__('تم تسجيلك يا ') + first(d.name) + __('. غرفتك ') + r.no + ' (' + d.type + __(') في الطابق ') + floorOf(r.no) + __('، ورمز حجزك ') + mask(d.id) + '-' + r.no + '. '
         + (r.state === 'ready' ? __('الغرفة جاهزة. ') : __('الغرفة ', 'is') + STATE[r.state].toLowerCase() + __(' الآن وأبلغك عند جاهزيتها. ')) + __('أكمل الدفع واستلام المفتاح من الشاشة برقم هويتك أو جوالك.'));
@@ -2400,11 +2480,14 @@
     let handled = true;
     try {
       if (H.flow && /^(إلغاء|الغاء|لا، شكراً|لا شكرا|فعالية ثانية|cancel|no,? thanks|another event)$/i.test(it.q)) {
-        const again = /فعالية|event/i.test(it.q); H.flow = null; wait.remove();
+        const again = /فعالية|event/i.test(it.q);
+        if (H.flow.name === 'reg' && H.flow.data.type) lostAdd(H.flow.data, H.flow.data.low ? 'below' : H.flow.data.round ? 'offer' : 'price');      // someone saw a price and walked away: the owner should know
+        H.flow = null; wait.remove();
         if (again) { H.flow = { name: 'event', step: null, data: {} }; eventNext(); } else reply(__('تمام، ألغيت. بماذا أخدمك؟'));
       } else if (H.flow) {
         if (H.flow.name === 'maint') { H.flow = null; chatWait = wait; await chatTurn(raw, { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw)) }, intent: 'maint' }); }
         else {
+          if (haggling(it.q)) { wait.remove(); regHaggle(raw, it.q); return handled; }
           const aside = H.flow.name === 'reg' ? regAside(it.q) : flowAside(it.q, raw);      // a greeting or a question, not an answer to the step
           if (!aside) wait.remove(); else chatWait = wait;
           if (aside) await (H.flow.name === 'reg' ? regAnswer : flowAnswer)(raw, it.q);
