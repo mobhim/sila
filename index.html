@@ -70,11 +70,13 @@
     <a href="#stage" data-go-x="stage" data-en="Try the prototype">جرّب النموذج</a>
     <a href="#system" data-go-x="system" data-en="Capabilities">القدرات</a>
     <a href="#limitsSec" data-go-x="limitsSec" data-en="Permissions">الصلاحيات</a>
+    <a href="#syncSec" data-go-x="syncSec" data-en="Partner sync">المزامنة مع الشريك</a>
     <a href="#adminSec" data-go-x="adminSec" data-en="Admin console">لوحة الإدارة</a>
     <a href="#eventsSec" data-go-x="eventsSec" data-en="Event planner">مخطِّط الفعاليات</a>
     <a href="#suitesSec" data-go-x="suitesSec" data-en="Rooms">الغرف</a>
     <p class="x-menu-h" data-en="Pages">الصفحات</p>
     <a href="admin.html" data-en="Admin console ↗">لوحة الإدارة ↗</a>
+    <a href="partner.html" data-en="Partner system (demo) ↗">نظام الشريك (تجريبي) ↗</a>
     <a href="landmarks.html" data-en="City landmarks ↗">معالم المدن ↗</a>
   </div>
 </div>
@@ -103,7 +105,7 @@
         <p class="x-badge" data-x="1"><span>SILA 2.1</span><span data-en="Hotel front-desk assistant · working prototype">مساعد استقبال فندقي · نموذج أولي يعمل</span></p>
         <h1 class="x-title" data-x="2" data-en="A front desk that works <em>inside your hotel’s policy</em>">استقبال يعمل <em>داخل سياسة فندقك</em></h1>
         <p class="x-role" data-x="3"><span data-en="Right now, Sila">الآن، المساعد</span> <em id="role">يفهم طلبات النزيل</em></p>
-        <p class="x-lede" data-x="4" data-en="Sila completes the guest’s arrival, solves problems after payment, sends whatever exceeds its permissions to staff, and logs every decision.">صلة تكمل وصول النزيل، وتحل مشاكله بعد الدفع، وتحوّل ما يتجاوز صلاحياتها إلى الموظف، وتسجّل كل قرار.</p>
+        <p class="x-lede" data-x="4" data-en="Sila is an agent that runs the guest’s journey with tools and permissions: it completes the arrival, solves problems after payment, sends whatever exceeds its permissions to staff, and logs every decision.">صلة وكيل يدير رحلة النزيل بالأدوات والصلاحيات: يكمل الوصول، ويحل المشاكل بعد الدفع، ويحوّل ما يتجاوز صلاحياته إلى الموظف، ويسجّل كل قرار.</p>
         <div class="x-cta" data-x="5">
           <button class="big solid" type="button" id="ctaDemo" data-en="Watch Sila work">شاهد صلة تعمل</button>
           <button class="big out" type="button" data-go-x="system" data-en="Explore the capabilities">استكشف القدرات</button>
@@ -121,24 +123,25 @@
   </header>
 
 
-  <!-- 2 · how it works (C8) -->
+  <!-- 2 · how it works: the agent loop (C8) -->
   <section class="x-sec x-sol" id="solution">
     <div class="wrap">
       <div class="x-head" data-rv>
-        <h2 data-en="How Sila works: <em>three steps, one thread</em>">كيف تعمل صلة: <em>ثلاث خطوات، خيط واحد</em></h2>
-        <p data-en="The guest writes, Sila decides within the hotel’s permissions, and the hotel sees and approves.">النزيل يكتب، وصلة تقرر داخل صلاحيات الفندق، والفندق يرى ويوافق.</p>
+        <h2 data-en="How Sila works: <em>the agent proposes, the code decides</em>">كيف تعمل صلة: <em>الوكيل يقترح، والكود يقرر</em></h2>
+        <p data-en="Every guest message goes round one loop: the agent understands, picks a tool, asks the permission engine, acts, then reads the result and replies or carries on.">كل رسالة من النزيل تمر بحلقة واحدة: يفهم الوكيل، يختار أداة، يسأل محرّك الصلاحيات، ينفّذ، ثم يقرأ النتيجة فيرد أو يكمل.</p>
       </div>
       <div class="x-flow" data-rv>
         <svg class="x-flow-line" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M20 60 C220 10 380 110 600 60 S980 10 1180 60"/><circle class="x-pulse" r="7"/></svg>
-        <div class="x-node"><span class="x-ico">1</span><b data-en="The guest">النزيل</b><p data-en="Writes in Arabic or English, on the kiosk or the web.">يكتب بالعربي أو الإنجليزي، على شاشة الاستقبال أو الموقع.</p></div>
-        <div class="x-node x-core"><img src="logo.svg" alt="" width="52" height="52"><b data-en="Sila">صلة</b><p data-en="Understands · decides within permissions · logs">تفهم · تقرر ضمن الصلاحيات · تسجّل</p></div>
+        <div class="x-node"><span class="x-ico">1</span><b data-en="The guest">النزيل</b><p data-en="Writes or asks for anything, at any moment, in Arabic or English.">يكتب أو يطلب أي شيء، في أي وقت، بالعربي أو الإنجليزي.</p></div>
+        <div class="x-node x-core"><img src="logo.svg" alt="" width="52" height="52"><b data-en="Sila’s agent">وكيل صلة</b><p data-en="Understands · picks a tool · asks permission · acts · logs">يفهم · يختار أداة · يستأذن · ينفّذ · يسجّل</p></div>
         <div class="x-node"><span class="x-ico">3</span><b data-en="The hotel">الفندق</b><p data-en="Sets the limits, approves the exceptions, sees everything.">يضع الحدود، ويوافق على الاستثناءات، ويرى كل شيء.</p></div>
       </div>
       <div class="x-pillars">
-        <article data-rv><h3 data-en="Understands">يفهم</h3><p data-en="Splits a guest’s message into separate requests and routes each one to the right department.">يقسّم رسالة النزيل إلى طلبات منفصلة، ويوجّه كل طلب للقسم المسؤول.</p></article>
-        <article data-rv><h3 data-en="Acts within limits">ينفّذ داخل الحدود</h3><p data-en="Reissues codes, moves guests to a ready room, offers capped compensation, only where the hotel allows.">يعيد إصدار الرموز، وينقل النزيل لغرفة جاهزة، ويعوّض بحد معيّن، فقط حيث يسمح الفندق.</p></article>
-        <article data-rv><h3 data-en="Logs everything">يسجّل كل شيء</h3><p data-en="Every action, every approval and every refusal lands in an audit trail the hotel can review.">كل إجراء وكل موافقة وكل رفض يُسجَّل في سجل يراجعه الفندق.</p></article>
+        <article data-rv><h3 data-en="Understands and picks a tool">يفهم ويختار أداة</h3><p data-en="The agent reads the guest’s message and the state of the booking, then picks one tool out of twelve: find the booking, check in, route a request, issue the code, open a ticket, move rooms, and more.">يقرأ الوكيل رسالة النزيل وحالة حجزه، ثم يختار أداة واحدة من اثنتي عشرة: البحث عن الحجز، تسجيل الوصول، تحويل الطلب، إصدار الرمز، فتح بلاغ، النقل، وغيرها.</p></article>
+        <article data-rv><h3 data-en="The code decides">الكود يقرر</h3><p data-en="Every call passes the permission engine. What is allowed runs. What is over the line waits for a staff member. What is forbidden is refused in code, however the request is worded. Amounts are calculated in code only.">كل استدعاء يمر على محرّك الصلاحيات. المسموح يُنفَّذ، وما يتجاوز الحد ينتظر موافقة موظف، والممنوع يُرفض في الكود مهما كانت صياغة الطلب. والمبالغ تُحسب في الكود فقط.</p></article>
+        <article data-rv><h3 data-en="Reads the result and carries on">يقرأ النتيجة ويكمل</h3><p data-en="The tool’s result goes back to the agent, which replies or continues with another tool, six steps at most per message. Every step shows in the agent trail and is kept in the hotel’s log.">تعود نتيجة الأداة إلى الوكيل، فيرد على النزيل أو يكمل بأداة أخرى، بحد أقصى ست خطوات للرسالة. وكل خطوة تظهر في «مسار الوكيل» وتُحفظ في سجل الفندق.</p></article>
       </div>
+      <p class="x-more" data-rv data-en="The agent’s brain can be swapped: written rules that always run inside the browser, or an optional language model that falls back to the rules if it fails.">عقل الوكيل قابل للتبديل: قواعد مكتوبة تعمل داخل المتصفح دائماً، أو نموذج لغوي اختياري يعود إلى القواعد إن تعطّل.</p>
     </div>
   </section>
 
@@ -148,7 +151,7 @@
       <div class="x-head x-head-row" data-rv>
         <div>
           <h2 data-en="The prototype <em>runs right here</em>">النموذج الأولي <em>يعمل هنا الآن</em></h2>
-          <p data-en="The full guest journey in six steps. The demo starts when you get here; tap any key to take over.">رحلة النزيل كاملة في ست خطوات. يبدأ العرض حين تصل هنا، واضغط أي زر لتتولّى القيادة.</p>
+          <p data-en="The full guest journey in six steps, run by the agent. The demo starts when you get here; tap any key to take over, or write to the agent at any moment.">رحلة النزيل كاملة في ست خطوات يديرها الوكيل. يبدأ العرض حين تصل هنا، واضغط أي زر لتتولّى القيادة، أو اكتب للوكيل أي طلب في أي وقت.</p>
         </div>
         <div class="x-head-acts"><button class="big out" type="button" id="ctaTry" data-en="Try it yourself">جرّب بنفسك</button></div>
       </div>
@@ -273,12 +276,30 @@
     </div>
   </section>
 
+  <!-- 5b · partner sync -->
+  <section class="x-sec x-panel x-panel-ev" id="syncSec">
+    <div class="wrap x-panel-in">
+      <div class="x-panel-copy" data-rv>
+        <h2 data-en="In sync with <em>the hotel’s own system</em>">تتزامن مع <em>نظام الفندق نفسه</em></h2>
+        <p data-en="Through a connector, Sila reads bookings, room states and rates from the partner hotel’s system and sends back what the agent does. In this prototype the partner is a demo system running inside the browser, with its own data.">عبر موصّل، تقرأ صلة الحجوزات وحالة الغرف والأسعار من نظام الفندق الشريك، وترسل له ما ينفّذه الوكيل. في هذا النموذج الشريك نظام تجريبي يعمل داخل المتصفح ببياناته الخاصة.</p>
+        <ol class="x-steps">
+          <li data-en="Open the partner system beside this page.">افتح نظام الشريك بجانب هذه الصفحة.</li>
+          <li data-en="Change a rate or a room state there, and watch the guest screen update.">غيّر هناك سعراً أو حالة غرفة، وشاهد شاشة النزيل تتحدّث.</li>
+          <li data-en="Check a guest in here and see it arrive there. Then try “Disconnect the partner”.">سجّل وصول نزيل هنا وشاهده يصل هناك. ثم جرّب «افصل الشريك».</li>
+        </ol>
+        <a class="big solid" href="partner.html" target="_blank" rel="noopener" data-en="Open the partner system ↗">افتح نظام الشريك ↗</a>
+        <p class="x-sync-now"><span id="syncState" class="sync-state"></span></p>
+      </div>
+      <figure class="x-panel-shot" data-rv><div class="x-device"><div class="x-device-bar"><i></i><i></i><i></i><span>PARTNER · DEMO</span></div><img data-shot-src="partner" alt="" loading="lazy" decoding="async"></div></figure>
+    </div>
+  </section>
+
   <!-- 6 · admin console (C10) -->
   <section class="x-sec x-panel" id="adminSec">
     <div class="wrap x-panel-in">
       <div class="x-panel-copy" data-rv>
         <h2 data-en="The hotel sees <em>everything, live</em>">الفندق يرى <em>كل شيء لحظياً</em></h2>
-        <p data-en="The admin console is a separate page for staff: room board, bookings, approvals, cleaning and maintenance tickets, demand pricing, the assistant’s permissions, and a log of every action.">لوحة الإدارة صفحة منفصلة للموظفين: لوحة الغرف، والحجوزات، والموافقات، وبلاغات النظافة والصيانة، والتسعير حسب الطلب، وصلاحيات المساعد، وسجل بكل إجراء.</p>
+        <p data-en="The admin console is a separate page for staff: room board, bookings, approvals, cleaning and maintenance tickets, demand pricing, the assistant’s permissions, the agent trail with its export, and the sync log.">لوحة الإدارة صفحة منفصلة للموظفين: لوحة الغرف، والحجوزات، والموافقات، وبلاغات النظافة والصيانة، والتسعير حسب الطلب، وصلاحيات المساعد، ومسار الوكيل مع تصديره، وسجل المزامنة.</p>
         <ol class="x-steps">
           <li data-en="Open the console beside this page.">افتح اللوحة بجانب هذه الصفحة.</li>
           <li data-en="On the guest screen, ask for a refund.">في شاشة النزيل، اطلب استرجاع المبلغ.</li>
@@ -291,7 +312,7 @@
   </section>
 
   <!-- 7 · event planner (C11) -->
-  <section class="x-sec x-panel x-panel-ev" id="eventsSec">
+  <section class="x-sec x-panel" id="eventsSec">
     <div class="wrap x-panel-in">
       <div class="x-panel-copy" data-rv>
         <h2 data-en="A second system: <em>the event planner</em>">نظام ثانٍ: <em>مخطِّط الفعاليات</em></h2>
@@ -413,10 +434,12 @@
         <a href="#stage" data-go-x="stage" data-en="Try it">التجربة</a>
         <a href="#system" data-go-x="system" data-en="Capabilities">القدرات</a>
         <a href="#limitsSec" data-go-x="limitsSec" data-en="Permissions">الصلاحيات</a>
+        <a href="#syncSec" data-go-x="syncSec" data-en="Partner sync">المزامنة مع الشريك</a>
       </nav>
       <nav class="x-foot-col" aria-label="الصفحات">
         <b data-en="Pages">الصفحات</b>
         <a href="admin.html" data-en="Admin console">لوحة الإدارة</a>
+        <a href="partner.html" data-en="Partner system (demo)">نظام الشريك (تجريبي)</a>
         <a href="landmarks.html" data-en="City landmarks">معالم المدن</a>
         <button type="button" class="x-foot-link" data-events data-en="Event planner">مخطِّط الفعاليات</button>
       </nav>
