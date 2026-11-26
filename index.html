@@ -31,7 +31,7 @@
 <link rel="preload" href="fonts/thmanyah-serif-display-regular.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/thmanyah-serif-display-black.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" as="image" href="standard.webp" fetchpriority="high">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 <link rel="stylesheet" href="experience.css?v=4">
 </head>
 <body data-page="site" data-autoplay="view">
@@ -81,6 +81,7 @@
   </div>
 </div>
 
+<button class="help-book" id="helpBook" type="button" aria-controls="helpBox" data-en="Book now">احجز الآن</button>
 <button class="help-fab" id="helpFab" type="button" aria-expanded="false" aria-controls="helpBox" aria-label="تحدّث مع صلة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4.5"/></svg></button>
 <section class="help-box" id="helpBox" dir="rtl" lang="ar" aria-label="صلة" hidden>
   <div class="help-head"><span>صلة</span><small id="helpAi" hidden>عبر نموذج لغوي</small><button type="button" id="helpClose" aria-label="إغلاق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -455,10 +456,10 @@
     var q = new URLSearchParams(location.search).get('lang'), l = q;
     try { if (q !== 'ar' && q !== 'en') l = localStorage.getItem('sila.lang'); } catch (e) {}
     if (l !== 'ar' && l !== 'en') l = /^ar\b/i.test(navigator.language || '') ? 'ar' : 'en';
-    if (l === 'en') document.write('<script src="i18n.en.js?v=12"><\/script>');
+    if (l === 'en') document.write('<script src="i18n.en.js?v=13"><\/script>');
   })();
 </script>
-<script src="app.min.js?v=19"></script>
+<script src="app.min.js?v=20"></script>
 <script src="experience.js?v=4"></script>
 </body>
 </html>

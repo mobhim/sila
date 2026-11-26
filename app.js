@@ -2037,17 +2037,26 @@
     reply(__('أهلاً ') + first(b.name) + __('، دخلت على حجزك: ') + bookingLine(b) + __(' بماذا أخدمك؟'));
   }
   function needLogin(raw) { H.pending = { raw: raw }; reply(__('اكتب رقم هويتك أو جوالك لأعرف غرفتك.'), [__('سجّلني كنزيل جديد')]); }
+  /* the registration asks one thing at a time. From the chat it starts with who the guest is; from the "Book now" button it starts
+     with what they can tap: the room type with tonight's rate, then the nights, and only then what has to be typed. */
   function regNext() {
-    const d = H.flow.data;
-    if (!d.name) { H.flow.step = 'name'; return reply(__('يسعدني أسجّلك. وش اسمك الكامل؟'), [__('إلغاء')]); }
-    if (!d.id) { H.flow.step = 'id'; return reply(__('اكتب رقم هويتك: 10 أرقام تبدأ بـ 1 أو 2.'), [__('إلغاء')]); }
-    if (!d.phone) { H.flow.step = 'phone'; return reply(__('ورقم جوالك؟ 10 أرقام تبدأ بـ 05.'), [__('إلغاء')]); }
-    if (!d.type) {
+    const d = H.flow.data, quick = !!H.flow.quick, input = $('#helpInput');
+    const step = (quick ? ['type', 'nights', 'name', 'id', 'phone'] : ['name', 'id', 'phone', 'type', 'nights']).find(k => !d[k]);
+    if (step) {
+      const tap = step === 'type' || step === 'nights';
+      H.flow.step = step; input.inputMode = step === 'id' || step === 'phone' ? 'numeric' : 'text';
+      if (quick) { if (tap) input.blur(); else input.focus({ preventScroll: true }); }      // a phone keyboard would cover the choices
+    }
+    if (step === 'name') return reply(quick ? __('على أي اسم أسجّل الحجز؟ اكتب الاسم الكامل.') : __('يسعدني أسجّلك. وش اسمك الكامل؟'), [__('إلغاء')]);
+    if (step === 'id') return reply(__('اكتب رقم هويتك: 10 أرقام تبدأ بـ 1 أو 2.'), [__('إلغاء')]);
+    if (step === 'phone') return reply(__('ورقم جوالك؟ 10 أرقام تبدأ بـ 05.'), [__('إلغاء')]);
+    if (step === 'type') {
       const opts = typeChips();
       if (!opts.length) { H.flow = null; return reply(__('نعتذر، كل الغرف محجوزة الآن.')); }
-      H.flow.step = 'type'; return reply(__('أي نوع تفضّل؟ هذي أسعار الليلة للمتاح:'), opts.concat([__('إلغاء')]));
+      return reply(__('أي نوع تفضّل؟ هذي أسعار الليلة للمتاح:'), opts.concat([__('إلغاء')]));
     }
-    if (!d.nights) { H.flow.step = 'nights'; return reply(__('كم ليلة؟'), ['1', '2', '3', '5', __('إلغاء')]); }
+    if (step === 'nights') return reply(__('كم ليلة؟'), ['1', '2', '3', '5', '7', __('إلغاء')]);
+    input.inputMode = 'text';
     const r = freeOf(d.type)[0], rate = rateNow(r), total = rate * d.nights * (1 + VAT);
     H.flow.step = 'confirm';
     reply(__('أراجع معك: ') + d.name + __('، ') + d.type + __('، ') + nightsText(d.nights) + __('، سعر الليلة ') + rate + __(' ر.س، والإجمالي ') + money(total) + __(' شاملاً الضريبة. أأكّد الحجز؟'), [__('تأكيد الحجز'), __('إلغاء')]);
@@ -2276,14 +2285,28 @@
     $('#helpAi').hidden = !ask;
     return handled;
   }
-  function helpOpen(on) {
-    helpBox.hidden = !on; helpFab.setAttribute('aria-expanded', String(on));
+  const helpBook = $('#helpBook');
+  function helpOpen(on, quiet) {
+    helpBox.hidden = !on; helpFab.setAttribute('aria-expanded', String(on)); helpBook.hidden = on;
     if (on) {
       $('#helpAi').hidden = !ask;
+      if (quiet) return;                            // the booking button starts its own conversation
       if (!helpFeed.children.length) reply(__('أهلاً وسهلاً، معك صلة. ') + CAN + __(' بماذا أخدمك؟'));
       $('#helpInput').focus({ preventScroll: true });
     }
   }
+  /* "Book now": the same chat window, opened straight into the registration, with choices to tap at each step */
+  function bookNow() {
+    if (helping) return;
+    if (demoOn) takeOver();
+    helpOpen(true, true);
+    const b = me();
+    if (b) return reply(__('أنت مسجّل عندنا يا ') + first(b.name) + ': ' + bookingLine(b));
+    helpSay('bot', __('أهلاً بك. أحجز لك في خمس خطوات قصيرة، والدفع والمفتاح بعدها من شاشة الوصول.'));
+    H.flow = { name: 'reg', quick: true, step: null, data: {} }; H.keep = null; H.pending = null;
+    regNext();
+  }
+  helpBook.addEventListener('click', bookNow);
   helpFab.addEventListener('click', () => helpOpen(helpBox.hidden));
   $('#helpClose').addEventListener('click', () => helpOpen(false));
   $('#helpForm').addEventListener('submit', e => { e.preventDefault(); const i = $('#helpInput'), v = i.value; i.value = ''; helpAsk(v); });

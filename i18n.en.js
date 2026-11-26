@@ -1013,5 +1013,7 @@ window.SILA_EN = {
   "تعذّر تنفيذ «{what}» الآن بسبب خلل عندنا، ولم يتغيّر شيء. موظف الاستقبال يستطيع مساعدتك فيه.": "I could not carry out “{what}” just now because of a fault on our side, and nothing was changed. Reception can help you with it.",
   "من المعالم في بيانات الفندق: ": "Landmarks in the hotel’s data: ",
   ". التفاصيل في صفحة المعالم.": ". The landmarks page has the details.",
-  "ليس في بيانات الفندق قائمة بالمطاعم القريبة، ولا أخمّن. خدمة الغرف متاحة لك، وإن أردت توصية فاكتب طلبك وأحوّله للكونسيرج.": "The hotel’s data holds no list of nearby restaurants, and I do not guess. Room service is available to you; if you want a recommendation, write your request and I will pass it to the concierge."
+  "ليس في بيانات الفندق قائمة بالمطاعم القريبة، ولا أخمّن. خدمة الغرف متاحة لك، وإن أردت توصية فاكتب طلبك وأحوّله للكونسيرج.": "The hotel’s data holds no list of nearby restaurants, and I do not guess. Room service is available to you; if you want a recommendation, write your request and I will pass it to the concierge.",
+  "على أي اسم أسجّل الحجز؟ اكتب الاسم الكامل.": "What name should the booking be under? Write the full name.",
+  "أهلاً بك. أحجز لك في خمس خطوات قصيرة، والدفع والمفتاح بعدها من شاشة الوصول.": "Welcome. I will book you in five short steps; payment and the key come afterwards on the arrival screen."
 };

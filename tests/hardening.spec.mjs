@@ -2,7 +2,7 @@
    changes anything, one message can hold several requests, and a failing tool does not break the turn.
    No real model is used: the tests answer the API address themselves. */
 import { test, expect } from '@playwright/test';
-import { LANGS, T, watch, open, readStore, bookingOf, arrive, ask, idle, lastTrail, showScreen, playModel, modelReady, ACT, planOf, replyOf, takeOver, enterNumber, sendRequests, noArabic } from './helpers.mjs';
+import { LANGS, T, watch, open, readStore, bookingOf, arrive, ask, idle, lastTrail, showScreen, playModel, modelReady, ACT, planOf, replyOf, takeOver, enterNumber, sendRequests, noArabic, noSideScroll } from './helpers.mjs';
 import { FALSE_AR, FALSE_EN, FINE_AR, FINE_EN } from './claims.cases.mjs';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -463,3 +463,66 @@ test.describe('G · evaluation set', () => {
     expect(out).toMatch(/injection\s+20\s+100\.0%/);                                 // nothing forbidden slips through the path
   });
 });
+
+for (const lang of LANGS) {
+  test.describe('H · quick booking · ' + lang, () => {
+    test('“Book now” opens the chat straight into a booking made by tapping: type with tonight’s rate, nights, then name, ID and mobile', async ({ page }) => {
+      const errors = watch(page);
+      await open(page, 'index.html', lang);
+      const book = page.locator('#helpBook'), chips = page.locator('#helpChips .chip'), feed = page.locator('#helpFeed .m.bot');
+      await expect(book).toBeVisible();
+      await expect(book).toHaveText(T(lang, 'احجز الآن', 'Book now'));
+      const look = await book.evaluate(n => { const s = getComputedStyle(n), r = n.getBoundingClientRect(), fab = document.getElementById('helpFab').getBoundingClientRect();
+        return { h: r.height, inside: r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, apart: r.right <= fab.left || r.left >= fab.right, bg: s.backgroundColor, color: s.color, font: s.fontFamily,
+          head: getComputedStyle(document.querySelector('.help-head')).fontFamily }; });
+      expect(look.h).toBeGreaterThanOrEqual(44);
+      expect(look.inside).toBe(true); expect(look.apart).toBe(true);                   // on the screen, beside the chat button, not on top of it
+      expect(look.bg).toBe('rgb(198, 242, 78)'); expect(look.color).toBe('rgb(12, 42, 36)');      // the identity's lime and ink
+      expect(look.font).toBe(look.head);                                               // the chat's own display face
+      await noSideScroll(page);
+
+      await book.click();
+      await expect(page.locator('#helpBox')).toBeVisible();
+      await expect(book).toBeHidden();
+      await expect(chips.first()).toContainText(/\d{3}/);                              // each room type carries tonight's rate
+      expect(await chips.count()).toBeGreaterThanOrEqual(3);
+      for (const box of await chips.evaluateAll(list => list.map(n => n.getBoundingClientRect().height))) expect(box).toBeGreaterThanOrEqual(44);
+      const type = (await chips.first().textContent()).split(' · ')[0];
+      await chips.first().click();
+      await expect(feed.last()).toContainText(T(lang, 'كم ليلة', 'How many nights'));
+      await chips.filter({ hasText: /^2$/ }).click();
+      await expect(feed.last()).toContainText(T(lang, 'على أي اسم', 'What name'));
+      const send = async text => { await page.locator('#helpInput').fill(text); await page.locator('#helpForm button[type="submit"]').click(); };
+      await send(T(lang, 'ريم السالم', 'Reem Alsalem'));
+      await expect(page.locator('#helpInput')).toHaveAttribute('inputmode', 'numeric');      // a number pad for the two numbers
+      await send('1055512345');
+      await expect(feed.last()).toContainText('05');                                   // the chat takes one message at a time
+      await send('0555512345');
+      await expect(feed.last()).toContainText(type);                                   // the summary, with the code's own total
+      await expect(feed.last()).toContainText(/\d,\d{3}\.\d{2}|\d{3}\.\d{2}/);
+      await chips.first().click();                                                     // confirm
+      await expect.poll(async () => (await readStore(page, lang)).bookings.length).toBe(5);
+      const b = await bookingOf(page, lang, '1055512345'), s = await readStore(page, lang);
+      expect(b.nights).toBe(2); expect(b.phone).toBe('0555512345'); expect(b.paid).toBe(false);
+      expect(s.rooms.find(r => r.no === b.room).cat).toBe(type);
+      await expect(feed.last()).toContainText(b.room);
+      if (lang === 'en') await noArabic(page);
+      await noSideScroll(page);
+      expect(errors).toEqual([]);
+    });
+
+    test('“Book now” can be cancelled, and a guest who is signed in is shown their booking instead', async ({ page }) => {
+      await open(page, 'index.html', lang);
+      await page.locator('#helpBook').click();
+      await page.locator('#helpChips .chip').last().click();                           // cancel
+      await expect(page.locator('#helpFeed .m.bot').last()).toContainText(T(lang, 'ألغيت', 'cancelled'));
+      expect((await readStore(page, lang)).bookings.length).toBe(4);
+      await page.locator('#helpInput').fill(A); await page.locator('#helpForm button[type="submit"]').click();
+      await expect(page.locator('#helpFeed .m.bot').last()).toContainText('412');
+      await page.locator('#helpClose').click();
+      await page.locator('#helpBook').click();
+      await expect(page.locator('#helpFeed .m.bot').last()).toContainText('412');
+      expect((await readStore(page, lang)).bookings.length).toBe(4);
+    });
+  });
+}
