@@ -14,6 +14,7 @@
   const LOCAL = ['card', 'other_room', 'price', 'identify', 'choice'];
   const INTENT = { route_request: 'requests', issue_key: 'give_key', reissue_key: 'code', move_room: 'move', late_checkout: 'late', compensate: 'comp', request_staff_approval: 'refund',
     get_room_status: 'status', find_booking: 'mine', store_card_data: 'card', open_room_for_other: 'other_room', change_price: 'price' };
+  const FLOW = { start_registration: 'register', plan_event: 'event', book_tour: 'tour' };
   const fail = why => { throw new Error('model brain: ' + why); };
 
   /* every number of three digits or more in a free answer must be one the hotel's code supplied */
@@ -22,7 +23,7 @@
     return (String(reply).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/,(?=\d{3})/g, '').match(/\d{3,}/g) || []).every(n => known.has(n));
   }
 
-  /* o: { ask(task, input) -> Promise<output>, hotel() -> facts for the model } */
+  /* o: { ask(task, input) -> Promise<output>, hotel() -> facts for the model, channel?: 'chat', flows?: tools that only the chat window has } */
   function create(o) {
     const rules = SILA.brains.rules, by = a => Object.assign({ by: 'rules' }, a);
     return {
@@ -34,7 +35,7 @@
         const hotel = o.hotel(), b = state.booking;
         const out = await o.ask('agent', {
           text: input.shown, hotel,
-          state: { stage: state.stage, pending: state.pending, booking: b ? { room: b.room, category: b.cat, nights: b.nights, arrived: b.arrived, paid: b.paid, key: b.key, late: b.late, comp: !!b.comp, refunded: b.refunded, roomState: b.roomState, alt: !!b.alt } : null },
+          state: { channel: o.channel === 'chat' ? 'chat' : 'stage', stage: state.stage, pending: state.pending, booking: b ? { room: b.room, category: b.cat, nights: b.nights, arrived: b.arrived, paid: b.paid, key: b.key, late: b.late, comp: !!b.comp, refunded: b.refunded, roomState: b.roomState, alt: !!b.alt } : null },
           history: (turn.history || []).slice(-8).map(t => ({ guest: t.heard || '', agent: t.said || '' }))
         });
         if (!out || typeof out.tool !== 'string') fail('no tool');
@@ -45,6 +46,7 @@
           if (!grounded(reply, [hotel, b ? b.room : ''])) fail('a number the hotel did not supply');
           return { say: 'free', text: reply, intent: 'answer', end: true };
         }
+        if (o.flows && o.flows.includes(t)) return { say: 'flow', text: t, intent: FLOW[t], end: true };      // one of the chat window's own conversations
         if (!SILA.tools.has(t) || t === 'check_in') fail('unknown tool');
         let args = {}, intent = INTENT[t] || 'other';
         if (t === 'route_request') {

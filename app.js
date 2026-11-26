@@ -369,7 +369,8 @@
     };
     fetch(API).then(r => (r.ok ? r.json() : null)).then(j => {
       if (!j || !j.ai) return;
-      ask = remote; modelBrain = AG.brains.model.create({ ask: (task, input) => remote.json('', null, task, input), hotel: hotelContext });
+      ask = remote; modelBrain = AG.brains.model.create({ ask: (task, input) => remote.json('', null, task, input), hotel: () => hotelContext() });
+      chatBrain = AG.brains.model.create({ ask: (task, input) => remote.json('', null, task, input), hotel: () => hotelContext(me()), channel: 'chat', flows: ['start_registration', 'plan_event', 'book_tour'] });
       $('#aiTag').hidden = false; $('#helpAi').hidden = false; $('#evAiTag').hidden = false; $('#prAi').hidden = false;
     }).catch(() => {});
   }
@@ -556,7 +557,7 @@
 
   const AG = window.SILA, RULES = AG.brains.rules;
   /* the optional model brain (agent/brain-model.js) and the partner connector are attached further down; until then the agent runs on its rules and its own data */
-  let modelBrain = null, modelRestAt = 0;
+  let modelBrain = null, chatBrain = null, modelRestAt = 0;
   const modelOn = () => !!modelBrain && Date.now() >= modelRestAt;
   function modelDown() { modelRestAt = Date.now() + 60000; }      // quota, a timeout or a bad answer: the rules carry on, and the model is tried again later
   /* what the model brain is given to answer from. Every number here is computed by this page from the hotel's data. */
@@ -577,8 +578,8 @@
     __('المساعد لا يستقبل بيانات البطاقات ولا يغيّر الأسعار ولا يفتح غرفة لغير صاحب الحجز.'),
     __('هذا نموذج تجريبي: الأسعار والبيانات تجريبية، ولا يُخصم مبلغ ولا تُرسل رسائل.')
   ];
-  function hotelContext() {
-    const pct = pricePct(), b = cur, t = b && bill(b);
+  function hotelContext(who) {
+    const pct = pricePct(), b = who === undefined ? cur : who, t = b && bill(b);
     return {
       name: __('فندق صلة التجريبي'), season: PERIODS[periodKey()].label, adjustment: (pct > 0 ? '+' : '') + pct + '%', currency: __('ريال سعودي'),
       rooms: CATS.map(c => { const mine = S.rooms.filter(r => r.cat === c.key); return mine.length ? { category: c.key, nightlyRate: rateNow(mine[0]), rooms: mine.length, vacantAndReady: mine.filter(r => r.state === 'ready' && !occupant(r.no)).length } : null; }).filter(Boolean),
@@ -651,23 +652,29 @@
   const fill = (s, o) => s.replace(/\{(\w+)\}/g, (m, k) => (o[k] == null ? '' : o[k]));
   const session = { reqDone: false, waiting: false, offer: false };
   const resetSession = () => { session.reqDone = false; session.waiting = false; session.offer = false; };
+  /* the agent serves two surfaces with the same tools: the guest screen and the chat window. Each has its own booking, its own
+     offer on the table and its own place to speak; a tool is handed the surface its turn belongs to (the chat's is CHATC, below). */
+  const STAGE = {
+    stage: true, get b() { return cur; }, set b(v) { cur = v; }, session,
+    bot: (t, ok, x) => bot(t, ok, x), push: n => push(n), panel: (...n) => setPanel(...n), hint: (t, tone) => hint(t, tone), phase: p => setPhase(p), showRoom: (r, ok) => showRoom(r, ok), end: () => toEnd()
+  };
   /* card numbers never stay in a message, a log or a model call; identity and mobile numbers are cut to their last four digits */
   const redact = t => String(t).replace(/\b\d{13,19}\b|\b\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{1,7}\b/g, __('[رقم بطاقة محذوف]')).replace(/(^|\D)(?:[12]\d{5}|05\d{4})(\d{4})(?=\D|$)/g, '$1••••••$2');
 
-  function stageOf(b) {
+  function stageOf(b, c = STAGE) {
     if (!b) return 'identify';
     const r = roomOf(b);
-    if (!session.reqDone && !b.paid) return 'requests';
+    if (!c.session.reqDone && !b.paid) return 'requests';
     if (!b.key && (!r || r.state !== 'ready')) return 'readiness';
     if (!b.paid) return 'payment';
     if (!b.key) return 'key';
     return 'stay';
   }
-  function snapshot() {                             // what a brain may see: no names, no identity or contact numbers
-    const b = cur, r = b && roomOf(b), alt = b && altFor(b), stage = stageOf(b);
+  function snapshot(c = STAGE) {                             // what a brain may see: no names, no identity or contact numbers
+    const b = c.b, r = b && roomOf(b), alt = b && altFor(b), stage = stageOf(b, c);
     return {
-      stage, waiting: session.waiting,
-      pending: session.offer ? 'move_offer' : stage === 'readiness' && !session.waiting ? 'room_choice' : null,
+      stage, waiting: c.session.waiting,
+      pending: c.session.offer ? 'move_offer' : c.stage && stage === 'readiness' && !c.session.waiting ? 'room_choice' : null,
       booking: b ? { room: b.room, category: r ? r.cat : '', cat: r ? r.cat : '', nights: b.nights, arrived: !!b.arrivedAt, paid: !!b.paid, key: b.key || null, late: !!b.late,
         comp: b.comp || 0, refunded: !!b.refunded, roomState: r ? r.state : 'ready', alt: alt ? alt.no : null } : null,
       perms: { reissue: !!S.perms.reissue, ticket: !!S.perms.ticket, move: !!S.perms.move, late: !!S.perms.late, limit: S.perms.limit }
@@ -694,7 +701,8 @@
     comp: __('يطلب تعويضاً'), move: __('يطلب تغيير الغرفة'), late: __('يطلب تأخير المغادرة'), code: __('رمز الدخول لا يعمل'), clean: __('الغرفة تحتاج تنظيفاً'),
     maint: __('عطل في الغرفة'), bill: __('يسأل عن فاتورته'), rates: __('يسأل عن الأسعار'), status: __('يسأل عن جاهزية غرفته'), mine: __('يسأل عن حجزه'),
     requests: __('طلبات للإقامة'), other: __('ملاحظة للاستقبال'), apology: __('اعتذار عن الإزعاج'), answer: __('سؤال عام يُجاب من بيانات الفندق'), fallback: __('بديل بعد قرار الموظف'), offer_move: __('عرض غرفة بديلة'),
-    paid: __('النزيل أتمّ الدفع'), choice: __('ردّ على عرض المساعد')
+    paid: __('النزيل أتمّ الدفع'), choice: __('ردّ على عرض المساعد'),
+    register: __('يريد التسجيل كنزيل جديد'), event: __('يريد حجز قاعة أو فعالية'), tour: __('يريد جولة استكشافية')
   };
   const WHY = {                                    // why the code said no
     card_data: __('بيانات البطاقات ممنوعة دائماً'), other_room: __('فتح غرفة لغير صاحب الحجز ممنوع دائماً'), other_booking: __('حجز نزيل آخر: ممنوع دائماً'),
@@ -715,17 +723,17 @@
 
   /* ---------- the trail: on the guest screen as it happens, and in the store for the admin console ---------- */
   let turnN = 0;
-  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), heard: heardOf(input), node: null, rows: {}, intent: null, src: 'stage' }; }
+  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), heard: heardOf(input), node: null, rows: {}, intent: null, src: 'stage', ui: STAGE }; }
   function trailNode(tr) {
-    if (tr.node || tr.src !== 'stage') return;
+    if (tr.node || !tr.ui) return;
     const box = el('div', 'm trail'), head = el('div', 'trail-head');
     head.append(el('span', '', __('مسار الوكيل')), tr.brainTag = el('small', '', ''));
     tr.under = el('p', 'trail-got'); tr.list = el('ol');
-    box.append(head, tr.under, tr.list); tr.node = box; push(box);
+    box.append(head, tr.under, tr.list); tr.node = box; tr.ui.push(box);
   }
   function trailAdd(tr, e) {
     if (e.intent && !tr.intent) tr.intent = e.intent;
-    if (tr.src === 'stage') {
+    if (tr.ui) {
       trailNode(tr);
       tr.under.replaceChildren(el('b', '', __('فهمت: ')), INTENT_LABEL[tr.intent] || INTENT_LABEL.other);
       tr.brainTag.textContent = e.brain === 'model' ? __('عقل النموذج') : __('عقل القواعد');
@@ -734,7 +742,7 @@
         const v = verdictOf(e), li = tr.rows[e.n] || (tr.rows[e.n] = tr.list.appendChild(el('li')));
         const top = el('div'); top.append(el('b', '', TOOL_LABEL[e.tool] || e.tool), el('span', 'tag ' + v[0], v[1]));
         li.replaceChildren(top, el('small', '', v[2] + (e.result && e.result.note ? ' ← ' + e.result.note : '')));
-        toEnd();
+        tr.ui.end();
       }
     }
     if (e.waiting) return;                          // the store keeps the outcome, not the wait
@@ -776,11 +784,11 @@
 
   /* ---------- the tools: each one is the page's own function, reached only through the permission engine ---------- */
   const done = (text, d) => { if (d.verdict === 'allow') log(text, d.tier === 'auto' ? 'auto' : 'limit'); };      // an approved call was already logged by the approval itself
-  async function moveTo(b, alt, why, ok) {
+  async function moveTo(b, alt, why, ok, c = STAGE) {
     const old = b.room, oldRoom = roomOf(b);
     if (why === 'maint' && oldRoom) oldRoom.state = 'maint';
     b.room = alt.no; save(); renderRooms(); renderRows();
-    setPanel(...codePanel(b)); await showRoom(b.room, ok);
+    c.panel(...codePanel(b)); await c.showRoom(b.room, ok);
     return old;
   }
   const billLine = (b, t) => {
@@ -793,141 +801,142 @@
       + CATS.map(c => { const r = S.rooms.find(x => x.cat === c.key); return r ? c.key + ' ' + rateNow(r) + __(' ر.س') : ''; }).filter(Boolean).join(__('، ')) + '.';
   };
   const TOOLS = {
-    async find_booking(a, d, x, ok) {
-      if (!a.key) { const b = cur; if (!b) { await speak('need_id', null, ok); return { ok: false }; } await bot(__('حجزك: ') + bookingLine(b), ok); return { ok: true, note: __('الجناح ') + b.room }; }
+    async find_booking(a, d, x, ok, c = STAGE) {
+      if (!a.key) { const b = c.b; if (!b) { await speak('need_id', null, ok, undefined, c); return { ok: false }; } await c.bot(__('حجزك: ') + bookingLine(b), ok); return { ok: true, note: __('الجناح ') + b.room }; }
+      if (!c.stage) return { ok: false };              // the chat window signs a guest in itself
       const by = a.by || (/^05/.test(a.key) ? 'phone' : 'id'), M = MODES[by];
-      setPhase('link'); if (mode !== by) setMode(by); entry = a.key; renderId(); setPanel(busyPanel(__('جارٍ البحث عن الحجز…'))); hint('');
+      c.phase('link'); if (mode !== by) setMode(by); entry = a.key; renderId(); c.panel(busyPanel(__('جارٍ البحث عن الحجز…'))); c.hint('');
       await sleep(900); if (!ok()) return { ok: false };
       const b = S.bookings.find(v => M.find(v, a.key));
       if (!b) {
-        setPhase('none'); shake(); panelEl.classList.remove('auto'); setPanel(keypadEl);
-        hint(__('لا يوجد حجز بهذا الرقم. تأكد منه أو جرّب ') + (by === 'id' ? __('رقم الجوال') : __('رقم الهوية')) + '.', 'bad');
-        await bot(__('لا يوجد حجز مرتبط بهذا الرقم.'), ok); return { ok: false, note: __('لا حجز بهذا الرقم') };
+        c.phase('none'); shake(); panelEl.classList.remove('auto'); c.panel(keypadEl);
+        c.hint(__('لا يوجد حجز بهذا الرقم. تأكد منه أو جرّب ') + (by === 'id' ? __('رقم الجوال') : __('رقم الهوية')) + '.', 'bad');
+        await c.bot(__('لا يوجد حجز مرتبط بهذا الرقم.'), ok); return { ok: false, note: __('لا حجز بهذا الرقم') };
       }
-      if (cur !== b) resetSession();
-      cur = b; { const r = roomOf(b); setScene(catIdx(r ? r.cat : '')); }
-      setPanel(...codePanel(b)); await showRoom(b.room, ok); if (!ok()) return { ok: false };
-      hint(__('رمز الحجز: ') + M.label + __(' وفي نهايته الغرفة ') + b.room + '.', 'ok');
-      if (b.arrivedAt) { if (!await bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false }; push(factsCard(b)); await sleep(900); }
+      if (c.b !== b) resetSession();
+      c.b = b; { const r = roomOf(b); setScene(catIdx(r ? r.cat : '')); }
+      c.panel(...codePanel(b)); await c.showRoom(b.room, ok); if (!ok()) return { ok: false };
+      c.hint(__('رمز الحجز: ') + M.label + __(' وفي نهايته الغرفة ') + b.room + '.', 'ok');
+      if (b.arrivedAt) { if (!await c.bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false }; c.push(factsCard(b)); await sleep(900); }
       return { ok: true, note: __('الجناح ') + b.room };
     },
-    async check_in(a, d, x, ok) {
-      const b = cur;
+    async check_in(a, d, x, ok, c = STAGE) {
+      const b = c.b;
       if (!b.arrivedAt) {
         b.arrivedAt = nowTime(); save(); renderRows();
         log(__('تسجيل وصول ') + b.name + __(' ب', 'by') + MODES[mode].label + __(' · الجناح ') + b.room, 'auto');
         partnerSend('check_in', b, { at: b.arrivedAt });
       }
-      if (!await bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false };
-      push(factsCard(b)); await sleep(900);
+      if (!await c.bot(__('أهلاً ') + b.name + __('. وجدت حجزك وسجّلت وصولك الساعة ') + b.arrivedAt + '.', ok)) return { ok: false };
+      c.push(factsCard(b)); await sleep(900);
       return { ok: true, note: __('الوصول ') + b.arrivedAt };
     },
-    async route_request(a, d, x, ok) {
-      const b = cur, items = a.items.map(i => ({ request: redact(i.request), dept: DEPTS[DEPT_IDS.indexOf(i.dept)] || DEPTS[2] }));
+    async route_request(a, d, x, ok, c = STAGE) {
+      const b = c.b, items = a.items.map(i => ({ request: redact(i.request), dept: DEPTS[DEPT_IDS.indexOf(i.dept)] || DEPTS[2] }));
       if (a.note) {
         log(__('ملاحظة من نزيل الجناح ') + b.room + ': ' + short(items[0].request), 'staff');
         partnerSend('request', b, { items: [{ request: items[0].request, dept: 'reception' }] });
-        await bot(__('سجّلت ملاحظتك وحوّلتها لموظف الاستقبال، وسيتواصل معك.'), ok);
+        await c.bot(__('سجّلت ملاحظتك وحوّلتها لموظف الاستقبال، وسيتواصل معك.'), ok);
         return { ok: true, note: DEPTS[2] };
       }
-      if (cur && stageOf(cur) !== 'stay') { setPanel(busyPanel(__('جارٍ تسجيل الطلبات…'))); hint(''); }
-      b.requests = (session.reqDone ? b.requests || [] : []).concat(items.map(i => i.request)).slice(-12); session.reqDone = true; save(); renderRows();
+      if (c.b && stageOf(c.b, c) !== 'stay') { c.panel(busyPanel(__('جارٍ تسجيل الطلبات…'))); c.hint(''); }
+      b.requests = (c.session.reqDone ? b.requests || [] : []).concat(items.map(i => i.request)).slice(-12); c.session.reqDone = true; save(); renderRows();
       items.forEach(i => log(__('طلب ') + b.name + ': ' + i.request + ' ← ' + i.dept, 'auto'));
       partnerSend('request', b, { items: a.items.map((i, k) => ({ request: items[k].request, dept: i.dept })) });
-      await bot(__('سجّلت طلباتك وحوّلتها للأقسام المختصة:'), ok, listNode(items));
+      await c.bot(__('سجّلت طلباتك وحوّلتها للأقسام المختصة:'), ok, listNode(items));
       return { ok: true, note: items.map(i => i.dept).filter((v, i, l) => l.indexOf(v) === i).join(__('، ')) };
     },
-    async get_room_status(a, d, x, ok) {
-      const b = cur, r = roomOf(b), alt = altFor(b), state = r ? r.state : 'ready';
+    async get_room_status(a, d, x, ok, c = STAGE) {
+      const b = c.b, r = roomOf(b), alt = altFor(b), state = r ? r.state : 'ready';
       const note = STATE[state] + (state !== 'ready' && alt ? __(' · بديل جاهز: ') + alt.no : '');
-      if (state === 'ready') { if (x.first) await bot(__('جناحك ') + b.room + __(' جاهز.'), ok); return { ok: true, note }; }
+      if (state === 'ready') { if (x.first) await c.bot(__('جناحك ') + b.room + __(' جاهز.'), ok); return { ok: true, note }; }
       const why = state === 'maint' ? __('تحت الصيانة', 'why') : __('قيد التجهيز', 'why');
-      if (b.key) await bot(fill(__('جناحك {room} الآن {why}.'), { room: b.room, why }), ok);
-      else if (session.waiting) await bot(fill(__('جناحك {room} ما زال {why}. سأبلغك فور جاهزيته.'), { room: b.room, why }), ok);
-      else await bot(__('جناحك ') + b.room + __(' محجوز لك لكنه ') + why + __('، لذلك لا أصدر مفتاحه الآن.') + (alt ? __(' عندي جناح جاهز من نفس الفئة وبنفس السعر: ') + alt.no + '.' : ''), ok);
+      if (b.key) await c.bot(fill(__('جناحك {room} الآن {why}.'), { room: b.room, why }), ok);
+      else if (c.session.waiting) await c.bot(fill(__('جناحك {room} ما زال {why}. سأبلغك فور جاهزيته.'), { room: b.room, why }), ok);
+      else await c.bot(__('جناحك ') + b.room + __(' محجوز لك لكنه ') + why + __('، لذلك لا أصدر مفتاحه الآن.') + (alt ? __(' عندي جناح جاهز من نفس الفئة وبنفس السعر: ') + alt.no + '.' : ''), ok);
       return { ok: true, note };
     },
-    async get_rates(a, d, x, ok) {
-      const b = cur;
+    async get_rates(a, d, x, ok, c = STAGE) {
+      const b = c.b;
       if (a.scope === 'bill' && b) {
         const t = bill(b);
-        if (b.paid) await bot(__('رسوم إقامتك مدفوعة مسبقاً.') + ' ' + __('الإجمالي') + ' ' + money(t.total) + '.', ok);
-        else await bot((x.first ? '' : __('جناحك جاهز. ')) + billLine(b, t), ok);
+        if (b.paid) await c.bot(__('رسوم إقامتك مدفوعة مسبقاً.') + ' ' + __('الإجمالي') + ' ' + money(t.total) + '.', ok);
+        else await c.bot((x.first ? '' : __('جناحك جاهز. ')) + billLine(b, t), ok);
         return { ok: true, note: __('الإجمالي') + ' ' + money(t.total) };
       }
-      await bot(ratesLine(), ok);
+      await c.bot(ratesLine(), ok);
       return { ok: true, note: PERIODS[periodKey()].label };
     },
-    async issue_key(a, d, x, ok) {
-      const b = cur;
+    async issue_key(a, d, x, ok, c = STAGE) {
+      const b = c.b;
       if (a.via === 'card') {
         b.key = 'card'; log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff');
-        save(); renderRows(); setPhase('open');
-        await bot(__('بطاقتك جاهزة عند موظف الاستقبال، اذكر له رقم هويتك أو جوالك فقط. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + '.', ok);
+        save(); renderRows(); c.phase('open');
+        await c.bot(__('بطاقتك جاهزة عند موظف الاستقبال، اذكر له رقم هويتك أو جوالك فقط. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + '.', ok);
         return { ok: true, note: __('بطاقة من الاستقبال') };
       }
-      b.key = 'code'; b.via = a.via; push(keyMessage(b, a.via, passcode()));
+      b.key = 'code'; b.via = a.via; c.push(keyMessage(b, a.via, passcode()));
       log(__('إصدار رمز دخول للجناح ') + b.room + __(' وإرساله ') + (a.via === 'sms' ? __('برسالة SMS') : __('بالبريد')), 'auto');
-      save(); renderRows(); setPhase('open');
-      await bot(__('أرسلت رمز الدخول ') + (a.via === 'sms' ? __('برسالة SMS') : __('إلى بريدك')) + __('. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + __('. إقامة سعيدة.'), ok);
+      save(); renderRows(); c.phase('open');
+      await c.bot(__('أرسلت رمز الدخول ') + (a.via === 'sms' ? __('برسالة SMS') : __('إلى بريدك')) + __('. جناحك ') + b.room + __(' في الطابق ') + floorOf(b.room) + __('. إقامة سعيدة.'), ok);
       return { ok: true, note: a.via === 'sms' ? __('برسالة SMS') : __('بالبريد') };
     },
-    async reissue_key(a, d, x, ok) {
-      const b = cur;
+    async reissue_key(a, d, x, ok, c = STAGE) {
+      const b = c.b;
       if (a.via === 'card') {
         if (b.key === 'card') {
           log(__('إرسال موظف لتبديل بطاقة الجناح ') + b.room, 'staff');
-          await bot(__('مفتاحك بطاقة من الاستقبال. أبلغت الموظف ليبدّلها لك حالاً.'), ok);
+          await c.bot(__('مفتاحك بطاقة من الاستقبال. أبلغت الموظف ليبدّلها لك حالاً.'), ok);
         } else {
           b.key = 'card'; save(); renderRows(); log(__('تجهيز بطاقة بديلة للجناح ') + b.room + __(' عند الاستقبال'), 'staff');
-          await bot(__('لم يوافق الموظف على رمز جديد. جهّزت لك بطاقة عند الاستقبال.'), ok);
+          await c.bot(__('لم يوافق الموظف على رمز جديد. جهّزت لك بطاقة عند الاستقبال.'), ok);
         }
         return { ok: true, note: __('بطاقة من الاستقبال') };
       }
-      if (d.verdict === 'allow' && !await bot(__('راجعت حجزك: الدفع مكتمل والجناح ') + b.room + __(' باسمك، فالخلل في الرمز نفسه.'), ok)) return { ok: false };
-      push(keyMessage(b, b.via, passcode()));
+      if (d.verdict === 'allow' && !await c.bot(__('راجعت حجزك: الدفع مكتمل والجناح ') + b.room + __(' باسمك، فالخلل في الرمز نفسه.'), ok)) return { ok: false };
+      c.push(keyMessage(b, b.via, passcode()));
       done(__('إلغاء الرمز القديم وإصدار رمز جديد للجناح ') + b.room, d);
-      await bot(__('ألغيت الرمز القديم وأرسلت لك رمزاً جديداً. وإن فضّلت، بطاقة من الاستقبال متاحة لك في أي وقت.'), ok);
+      await c.bot(__('ألغيت الرمز القديم وأرسلت لك رمزاً جديداً. وإن فضّلت، بطاقة من الاستقبال متاحة لك في أي وقت.'), ok);
       return { ok: true, note: __('رمز جديد، والقديم أُلغي') };
     },
-    async open_ticket(a, d, x, ok) {
-      const b = cur, text = a.kind === 'maint' ? short(redact(a.text || '')) : __('تنظيف عاجل');
+    async open_ticket(a, d, x, ok, c = STAGE) {
+      const b = c.b, text = a.kind === 'maint' ? short(redact(a.text || '')) : __('تنظيف عاجل');
       const n = addTicket(b.room, a.kind, text);
       done(a.kind === 'maint' ? __('بلاغ صيانة عاجل للجناح ') + b.room + (text ? ': ' + text : '') : __('مهمة تنظيف عاجلة للجناح ') + b.room, d);
       partnerSend('ticket', b, { n, kind: a.kind, text });
-      await bot(a.kind === 'maint' ? __('فتحت بلاغ صيانة عاجلاً للجناح ') + b.room + '.' : __('أرسلت فريق التدبير الفندقي إلى جناحك الآن.'), ok);
+      await c.bot(a.kind === 'maint' ? __('فتحت بلاغ صيانة عاجلاً للجناح ') + b.room + '.' : __('أرسلت فريق التدبير الفندقي إلى جناحك الآن.'), ok);
       return { ok: true, note: __('بلاغ #') + n };
     },
-    async move_room(a, d, x, ok) {
-      const b = cur, alt = S.rooms.find(r => r.no === a.to), had = stageOf(b);
+    async move_room(a, d, x, ok, c = STAGE) {
+      const b = c.b, alt = S.rooms.find(r => r.no === a.to), had = stageOf(b, c);
       if (!alt || occupant(alt.no) || alt.state !== 'ready') return { ok: false, note: WHY.target_unavailable };
-      const old = await moveTo(b, alt, a.why === 'maint' ? 'maint' : 'prep', ok); if (!ok()) return { ok: false };
-      session.waiting = false; session.offer = false;
+      const old = await moveTo(b, alt, a.why === 'maint' ? 'maint' : 'prep', ok, c); if (!ok()) return { ok: false };
+      c.session.waiting = false; c.session.offer = false;
       done(__('نقل ') + b.name + __(' من ') + old + __(' إلى ') + b.room + __(' (نفس الفئة)'), d);
       partnerSend('room_change', b, { from: old, to: b.room, fromState: a.why === 'maint' ? 'maint' : null });
-      if (b.key === 'code') { push(keyMessage(b, b.via, passcode())); await bot(__('نقلتك إلى الجناح ') + b.room + __(' وأرسلت رمزه. الرمز القديم أُلغي.'), ok); }
-      else if (b.key === 'card') { log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff'); await bot(__('نقلتك إلى الجناح ') + b.room + __('. بطاقته جاهزة عند الاستقبال.'), ok); }
-      else { if (had === 'readiness') hint(__('رمز الحجز تحدّث: الغرفة ') + b.room + '.', 'ok'); await bot(__('نقلتك إلى الجناح ') + b.room + __('. هو جاهز الآن.'), ok); }
+      if (b.key === 'code') { c.push(keyMessage(b, b.via, passcode())); await c.bot(__('نقلتك إلى الجناح ') + b.room + __(' وأرسلت رمزه. الرمز القديم أُلغي.'), ok); }
+      else if (b.key === 'card') { log(__('تجهيز بطاقة الجناح ') + b.room + __(' عند الاستقبال'), 'staff'); await c.bot(__('نقلتك إلى الجناح ') + b.room + __('. بطاقته جاهزة عند الاستقبال.'), ok); }
+      else { if (had === 'readiness') c.hint(__('رمز الحجز تحدّث: الغرفة ') + b.room + '.', 'ok'); await c.bot(__('نقلتك إلى الجناح ') + b.room + __('. هو جاهز الآن.'), ok); }
       return { ok: true, note: old + ' ← ' + b.room };
     },
-    async late_checkout(a, d, x, ok) {
-      const b = cur;
+    async late_checkout(a, d, x, ok, c = STAGE) {
+      const b = c.b;
       b.late = true; save(); renderRows();
       done(__('تأخير مغادرة ') + b.name + __(' ساعة إلى 1:00 ظهراً'), d);
-      await bot(__('مدّدت مغادرتك ساعة إلى 1:00 ظهراً.'), ok);
+      await c.bot(__('مدّدت مغادرتك ساعة إلى 1:00 ظهراً.'), ok);
       return { ok: true, note: __('المغادرة 1:00 ظهراً') };
     },
-    async compensate(a, d, x, ok) {
-      const b = cur, amt = d.amount;
+    async compensate(a, d, x, ok, c = STAGE) {
+      const b = c.b, amt = d.amount;
       b.comp = Math.max(b.comp || 0, amt); save(); renderRows();
       done(__('تعويض النزيل ') + b.name + __(' بمبلغ ') + money(amt) + __(' (الحد ') + S.perms.limit + __(' ر.س)'), d);
-      await bot(__('واعتذاراً عن الإزعاج عوّضتك بمبلغ ') + money(amt) + __(' يُعاد إلى وسيلة الدفع نفسها.'), ok);
+      await c.bot(__('واعتذاراً عن الإزعاج عوّضتك بمبلغ ') + money(amt) + __(' يُعاد إلى وسيلة الدفع نفسها.'), ok);
       return { ok: true, note: money(amt) };
     },
-    async request_staff_approval(a, d, x, ok) {          // reached only after a staff member said yes
-      const b = cur;
+    async request_staff_approval(a, d, x, ok, c = STAGE) {          // reached only after a staff member said yes
+      const b = c.b;
       b.refunded = true; save(); renderRows();
-      await bot(__('وافق الموظف. يُعاد المبلغ كاملاً إلى وسيلة الدفع نفسها.'), ok);
+      await c.bot(__('وافق الموظف. يُعاد المبلغ كاملاً إلى وسيلة الدفع نفسها.'), ok);
       return { ok: true, note: __('استرجاع كامل') + ' ' + money(d.amount) };
     }
   };
@@ -943,54 +952,54 @@
     }
     return __('استرجاع كامل لحجز ') + b.name + ' · ' + money(d.amount);
   }
-  async function askStaff(call, d, ok) {
+  async function askStaff(call, d, ok, c = STAGE) {
     const refund = call.tool === 'request_staff_approval';
-    setPanel(busyPanel(refund ? __('بانتظار قرار الموظف…') : __('بانتظار موافقة الموظف…'))); hint(__('الطلب الآن عند موظف الاستقبال في لوحة الإدارة.'), 'warn');
-    if (!await bot(refund ? __('الاسترجاع الكامل خارج صلاحياتي دائماً. حوّلت طلبك لموظف الاستقبال مع ملخص حالتك.') : __('هذا الإجراء خارج صلاحياتي الحالية. أرسلته للموظف مع ملخص الحالة.'), ok)) return false;
-    const yes = await approval(approvalText(call, d, cur));
-    hint(''); return ok() ? yes : false;
+    c.panel(busyPanel(refund ? __('بانتظار قرار الموظف…') : __('بانتظار موافقة الموظف…'))); c.hint(__('الطلب الآن عند موظف الاستقبال في لوحة الإدارة.'), 'warn');
+    if (!await c.bot(refund ? __('الاسترجاع الكامل خارج صلاحياتي دائماً. حوّلت طلبك لموظف الاستقبال مع ملخص حالتك.') : __('هذا الإجراء خارج صلاحياتي الحالية. أرسلته للموظف مع ملخص الحالة.'), ok)) return false;
+    const yes = await approval(approvalText(call, d, c.b));
+    c.hint(''); return ok() ? yes : false;
   }
-  async function saidNo(call, d, ok) {             // a staff member declined
+  async function saidNo(call, d, ok, c = STAGE) {             // a staff member declined
     const t = call.tool;
-    if (t === 'reissue_key' || (t === 'move_room' && stageOf(cur) === 'readiness')) return;      // the brain's next step says it
-    await bot(t === 'request_staff_approval' ? __('لم يوافق الموظف على الاسترجاع الكامل.') : t === 'open_ticket' ? __('أبلغت الموظف وسيتابع معك.')
+    if (t === 'reissue_key' || (t === 'move_room' && stageOf(c.b, c) === 'readiness')) return;      // the brain's next step says it
+    await c.bot(t === 'request_staff_approval' ? __('لم يوافق الموظف على الاسترجاع الكامل.') : t === 'open_ticket' ? __('أبلغت الموظف وسيتابع معك.')
       : t === 'move_room' ? __('تعذّر النقل الآن. فريق الصيانة في الطريق إليك.') : __('لم يوافق الموظف على هذا الطلب.'), ok);
   }
-  async function refuse(call, d, ok) {             // the code said no: say so plainly, and put the forbidden ones on the hotel's log
-    const c = d.code, t = call.tool, money0 = t === 'compensate' || t === 'request_staff_approval';
-    if (d.tier === 'never') log(__('رُفض في الكود: ') + (TOOL_LABEL[t] || WHY.unknown_tool) + (cur ? __(' · الجناح ') + cur.room : ''), 'never');
-    const text = c === 'card_data' ? __('لا أستقبل بيانات البطاقات ولا أحفظها أبداً، وحذفت الرقم من رسالتك. الدفع يتم من لوحة الدفع فقط.')
-      : c === 'other_room' || c === 'other_booking' ? __('لا أفتح غرفة ولا أصدر مفتاحها ولا أعرض حجزها إلا لصاحب الحجز نفسه. هذا ممنوع دائماً.')
-      : c === 'other_category' ? __('النقل يكون لغرفة من نفس الفئة وبنفس السعر فقط.')
-      : c === 'price' ? __('لا أغيّر الأسعار ولا المبالغ، ولا أتجاوز الدفع. السعر يحسبه نظام الفندق.')
-      : c === 'no_booking' ? __('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.')
-      : c === 'not_paid' ? (money0 ? __('لم يُدفع مبلغ بعد، فلا يوجد ما أعيده.') : __('لا أصدر المفتاح قبل إتمام الدفع.'))
-      : c === 'room_not_ready' ? __('لا أصدر المفتاح قبل جاهزية الجناح.')
-      : c === 'has_key' ? __('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.')
-      : c === 'no_key' ? __('لم يصدر مفتاحك بعد. نكمل الوصول أولاً.')
-      : c === 'not_arrived' ? __('نسجّل وصولك أولاً، ثم أصدر المفتاح.')
-      : c === 'already' ? __('نُفّذ هذا لك من قبل.')
-      : c === 'target_unavailable' ? __('لا يوجد جناح بديل جاهز من نفس الفئة الآن.')
-      : c === 'refunded' ? __('استُرجع مبلغ هذا الحجز، فلا أنفّذ عليه إجراءات جديدة.')
-      : c === 'no_contact' ? __('لا يوجد على الحجز رقم جوال أو بريد لهذه الطريقة. بطاقة من الاستقبال متاحة لك.')
+  async function refuse(call, d, ok, c = STAGE) {             // the code said no: say so plainly, and put the forbidden ones on the hotel's log
+    const dc = d.code, t = call.tool, money0 = t === 'compensate' || t === 'request_staff_approval';
+    if (d.tier === 'never') log(__('رُفض في الكود: ') + (TOOL_LABEL[t] || WHY.unknown_tool) + (c.b ? __(' · الجناح ') + c.b.room : ''), 'never');
+    const text = dc === 'card_data' ? __('لا أستقبل بيانات البطاقات ولا أحفظها أبداً، وحذفت الرقم من رسالتك. الدفع يتم من لوحة الدفع فقط.')
+      : dc === 'other_room' || dc === 'other_booking' ? __('لا أفتح غرفة ولا أصدر مفتاحها ولا أعرض حجزها إلا لصاحب الحجز نفسه. هذا ممنوع دائماً.')
+      : dc === 'other_category' ? __('النقل يكون لغرفة من نفس الفئة وبنفس السعر فقط.')
+      : dc === 'price' ? __('لا أغيّر الأسعار ولا المبالغ، ولا أتجاوز الدفع. السعر يحسبه نظام الفندق.')
+      : dc === 'no_booking' ? __('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.')
+      : dc === 'not_paid' ? (money0 ? __('لم يُدفع مبلغ بعد، فلا يوجد ما أعيده.') : __('لا أصدر المفتاح قبل إتمام الدفع.'))
+      : dc === 'room_not_ready' ? __('لا أصدر المفتاح قبل جاهزية الجناح.')
+      : dc === 'has_key' ? __('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.')
+      : dc === 'no_key' ? __('لم يصدر مفتاحك بعد. نكمل الوصول أولاً.')
+      : dc === 'not_arrived' ? __('نسجّل وصولك أولاً، ثم أصدر المفتاح.')
+      : dc === 'already' ? __('نُفّذ هذا لك من قبل.')
+      : dc === 'target_unavailable' ? __('لا يوجد جناح بديل جاهز من نفس الفئة الآن.')
+      : dc === 'refunded' ? __('استُرجع مبلغ هذا الحجز، فلا أنفّذ عليه إجراءات جديدة.')
+      : dc === 'no_contact' ? __('لا يوجد على الحجز رقم جوال أو بريد لهذه الطريقة. بطاقة من الاستقبال متاحة لك.')
       : __('هذا خارج ما أستطيع تنفيذه. حوّل طلبك لموظف الاستقبال إن أردت.');
-    await bot(text, ok);
+    await c.bot(text, ok);
   }
-  async function speak(code, state, ok, text) {
-    const b = cur;
+  async function speak(code, state, ok, text, c = STAGE) {
+    const b = c.b;
     switch (code) {
-      case 'free': return text ? bot(redact(text), ok) : true;      // a model's own words: only ever an answer, never an action
-      case 'ask_requests': return bot(__('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok);
-      case 'no_requests': session.reqDone = true; return bot(__('لا توجد طلبات الآن. يمكنك طلب أي شيء لاحقاً.'), ok);
-      case 'will_notify': session.waiting = true; return bot(__('سأبلغك فور جاهزيته، ولن تحتاج لمراجعة الاستقبال.'), ok);
-      case 'move_failed': session.waiting = true; return bot(__('تعذّر النقل. سأنتظر معك جاهزية جناحك.'), ok);
-      case 'room_ready': session.waiting = false; return bot(__('جناحك ') + b.room + __(' صار جاهزاً.'), ok);
-      case 'ask_key': return bot(__('كيف تفضّل استلام مفتاحك؟ رمز دخول إلكتروني، أو بطاقة عادية من الاستقبال.'), ok);
-      case 'welcome_back': return bot(__('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.'), ok);
-      case 'offer_move': { const alt = altFor(b); if (!alt) return true; session.offer = true; return bot(__('إن لم ترغب بالانتظار، أنقلك الآن إلى الجناح ') + alt.no + __(' من نفس الفئة وبنفس السعر.'), ok); }
-      case 'wait_maint': return bot(__('تمام. فريق الصيانة في الطريق إليك.'), ok);
-      case 'no_alt': return bot(__('لا يوجد جناح بديل جاهز من نفس الفئة الآن.'), ok);
-      case 'need_id': return bot(__('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.'), ok);
+      case 'free': return text ? c.bot(redact(text), ok) : true;      // a model's own words: only ever an answer, never an action
+      case 'ask_requests': return c.bot(__('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok);
+      case 'no_requests': c.session.reqDone = true; return c.bot(__('لا توجد طلبات الآن. يمكنك طلب أي شيء لاحقاً.'), ok);
+      case 'will_notify': c.session.waiting = true; return c.bot(__('سأبلغك فور جاهزيته، ولن تحتاج لمراجعة الاستقبال.'), ok);
+      case 'move_failed': c.session.waiting = true; return c.bot(__('تعذّر النقل. سأنتظر معك جاهزية جناحك.'), ok);
+      case 'room_ready': c.session.waiting = false; return c.bot(__('جناحك ') + b.room + __(' صار جاهزاً.'), ok);
+      case 'ask_key': return c.bot(__('كيف تفضّل استلام مفتاحك؟ رمز دخول إلكتروني، أو بطاقة عادية من الاستقبال.'), ok);
+      case 'welcome_back': return c.bot(__('مفتاحك مُسلَّم مسبقاً. أنا هنا لأي مشكلة.'), ok);
+      case 'offer_move': { const alt = altFor(b); if (!alt) return true; c.session.offer = true; return c.bot(__('إن لم ترغب بالانتظار، أنقلك الآن إلى الجناح ') + alt.no + __(' من نفس الفئة وبنفس السعر.'), ok); }
+      case 'wait_maint': return c.bot(__('تمام. فريق الصيانة في الطريق إليك.'), ok);
+      case 'no_alt': return c.bot(__('لا يوجد جناح بديل جاهز من نفس الفئة الآن.'), ok);
+      case 'need_id': return c.bot(__('أدخل رقم هويتك أو جوالك أولاً لأعرف حجزك.'), ok);
     }
     return true;
   }
@@ -1934,26 +1943,16 @@
     else if (key) intent = 'login';
     return { intent: intent, key: key, q: q };
   }
-  async function intentByAi(raw) {                 // only when the fixed patterns cannot tell what the guest wants
-    try {
-      const out = await ask.json(__('أنت «صلة»، مساعد فندق. ') + GUARD
-        + __('حدّد قصد النزيل من هذه القائمة فقط: register (يريد التسجيل أو حجز غرفة)، clean (يطلب تنظيفاً)، maint (يبلّغ عن عطل)، mine (يسأل عن حجزه)، prices (الأسعار)، available (الغرف المتاحة)، event (حجز قاعة أو فعالية)، tour (جولة استكشافية)، howto (ماذا تستطيعين)، other.\n')
-        + __('إذا كان القصد other فاكتب في reply رداً قصيراً ودوداً ضمن شؤون الفندق فقط، ولا تخترع أسعاراً أو بيانات حجوزات.\n')
-        + __('أعد كائن JSON واحداً فقط: {"intent":"clean","reply":""}\n<<<') + raw.slice(0, 300) + '>>>', { modelTier: 'quick', cache: false }, 'intent', { text: raw.slice(0, 300), hotel: hotelContext(), history: chatTurns.slice(0, -1).slice(-6) });
-      return out && typeof out.intent === 'string' ? out : null;
-    } catch (e) { aiOff(e); return null; }
-  }
-
   /* ---------- sign-in and registration ---------- */
   function login(key) {
     const b = S.bookings.find(x => x.id === key || (x.phone && x.phone === key));
     if (!b) { H.keep = key; reply(__('ما لقيت حجزاً بهذا الرقم. تبغاني أسجّلك كنزيل جديد؟'), [__('سجّلني كنزيل جديد'), __('لا، شكراً')]); return; }
     H.who = b.id;
     const todo = H.pending; H.pending = null;
-    if (todo) { helpSay('bot', __('أهلاً ') + first(b.name) + __('، دخلت على حجزك في الغرفة ') + b.room + '.'); return route(todo.intent, todo.raw, todo.q); }
+    if (todo) { helpSay('bot', __('أهلاً ') + first(b.name) + __('، دخلت على حجزك في الغرفة ') + b.room + '.'); return todo.raw ? chatDispatch(todo.raw, null) : reply(__('بماذا أخدمك؟')); }
     reply(__('أهلاً ') + first(b.name) + __('، دخلت على حجزك: ') + bookingLine(b) + __(' بماذا أخدمك؟'));
   }
-  function needLogin(intent, raw, q) { H.pending = { intent: intent, raw: raw, q: q }; reply(__('اكتب رقم هويتك أو جوالك لأعرف غرفتك.'), [__('سجّلني كنزيل جديد')]); }
+  function needLogin(raw) { H.pending = { raw: raw }; reply(__('اكتب رقم هويتك أو جوالك لأعرف غرفتك.'), [__('سجّلني كنزيل جديد')]); }
   function regNext() {
     const d = H.flow.data;
     if (!d.name) { H.flow.step = 'name'; return reply(__('يسعدني أسجّلك. وش اسمك الكامل؟'), [__('إلغاء')]); }
@@ -2003,27 +2002,6 @@
   }
 
   /* ---------- housekeeping and maintenance ---------- */
-  function callTeam(kind, text) {
-    const b = me(), note = text ? short(redact(text)) : '', label = (kind === 'clean' ? __('طلب تنظيف') : __('بلاغ صيانة')) + __(' للغرفة ') + b.room + (note ? ': ' + note : '');
-    const call = { tool: 'open_ticket', args: note ? { kind, text: note } : { kind } }, d = AG.permissions.decide(call, factsFor(b));
-    const tr = Object.assign(trailStart({ type: 'text', shown: redact(text || label) }), { src: 'chat', who: b, intent: kind });
-    const rec = extra => trailAdd(tr, Object.assign({ kind: 'tool', n: 0, tool: call.tool, args: call.args, verdict: d.verdict, tier: d.tier, code: d.code, brain: 'rules' }, extra));
-    const open = () => {
-      const n = addTicket(b.room, kind, note);
-      log(__('صلة: ') + label + ' (#' + n + ')', 'limit');
-      partnerSend('ticket', b, { n, kind, text: note });
-      reply((kind === 'clean' ? __('استدعيت فريق التنظيف لغرفتك ') : __('استدعيت فريق الصيانة لغرفتك ')) + b.room + __('. رقم البلاغ #') + n + __('، وتقدر تتابعه معي.'));
-      return { ok: true, note: __('بلاغ #') + n };
-    };
-    if (d.verdict === 'deny') { rec({ result: { ok: false, denied: true } }); return reply(__('هذا خارج ما أستطيع تنفيذه. حوّل طلبك لموظف الاستقبال إن أردت.')); }
-    if (d.verdict === 'allow') return rec({ result: open() });
-    reply(__('هذا الطلب يحتاج موافقة موظف الاستقبال الآن. أرسلته له وأرد عليك فور قراره.'));
-    approval(__('صلة: ') + label).then(yes => {
-      if (yes) rec({ approved: true, result: open() });
-      else { rec({ approved: false, result: { ok: false, declined: true } }); reply(__('اعتذر الموظف عن الطلب الآن. تواصل مع الاستقبال للتفاصيل.')); }
-    });
-  }
-
   /* ---------- halls: the guest states what they need, صلة plans it and books the site tour ---------- */
   function eventNext() {
     const d = H.flow.data;
@@ -2080,17 +2058,6 @@
       H.flow = { name: 'reg', step: null, data: { id: H.keep && /^[12]/.test(H.keep) ? H.keep : null, phone: H.keep && /^05/.test(H.keep) ? H.keep : null } }; H.keep = null;
       return regNext();
     }
-    if (intent === 'clean') return b ? callTeam('clean', '') : needLogin(intent, raw, q);
-    if (intent === 'maint') {
-      if (!b) return needLogin(intent, raw, q);
-      if (/^(بلاغ صيانة|صيانة|[أا]بي صيانة|[أا]بغى صيانة|maintenance( report)?|report a fault)$/i.test(q)) { H.flow = { name: 'maint', step: 'what', data: {} }; return reply(__('وش المشكلة بالضبط؟ مثلاً: المكيف لا يبرّد.'), [__('المكيف لا يعمل'), __('تسريب ماء'), __('الإنارة معطّلة'), __('إلغاء')]); }
-      return callTeam('maint', raw.trim());
-    }
-    if (intent === 'mine') return b ? reply(__('حجزك يا ') + first(b.name) + ': ' + bookingLine(b)) : needLogin(intent, raw, q);
-    if (intent === 'prices') {
-      const pct = pricePct();
-      return reply(__('أسعار الليلة (') + PERIODS[periodKey()].label + (pct ? __('، ') + (pct > 0 ? '+' : '') + pct + '%' : '') + '): ' + CATS.map(c => { const r = S.rooms.find(x => x.cat === c.key); return r ? c.key + ' ' + rateNow(r) + __(' ر.س') : ''; }).filter(Boolean).join(__('، ')) + '.');
-    }
     if (intent === 'available') {
       const list = CATS.map(c => [c.key, freeOf(c.key).length]).filter(x => x[1]);
       return reply(list.length ? __('المتاح الآن: ') + list.map(x => x[0] + ' (' + x[1] + ')').join(__('، ')) + __('. أسجّلك في واحدة؟') : __('كل الغرف محجوزة الآن.'), list.length ? [__('سجّلني كنزيل جديد')] : null);
@@ -2108,47 +2075,110 @@
     if (intent === 'howto') return reply(CAN + __(' اكتب طلبك بكلامك.'));
     return null;
   }
+  /* ---------- the chat window is a second surface of the same agent ----------
+     Signing in, registering a new guest and planning an event are the chat's own conversations. Everything else a guest writes
+     is one turn of the agent loop: a brain proposes, the permission engine decides, the same tools run, and the trail is kept. */
+  const chatSession = { reqDone: true, waiting: false, offer: false };
+  const chatEnd = () => helpFeed.scrollTo({ top: helpFeed.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
+  let chatWait = null;                            // the three dots shown while the agent works
+  const chatClear = () => { if (chatWait) { chatWait.remove(); chatWait = null; } };
+  const CHATC = {
+    stage: false, get b() { return me(); }, set b(v) { H.who = v ? v.id : null; }, session: chatSession,
+    async bot(text, ok, extra) {
+      chatClear();
+      const t = el('div', 'm bot typing'); t.append(el('i'), el('i'), el('i')); helpFeed.append(t); chatEnd();
+      await sleep(Math.min(800, 280 + text.length * 6)); t.remove();
+      const m = helpSay('bot', text); if (extra) m.append(extra);
+      chips(baseChips()); chatEnd();
+      return ok();
+    },
+    push(node) { chatClear(); helpFeed.append(node); chatEnd(); return node; },
+    panel() {}, hint() {}, phase() {}, showRoom: async () => {}, end: chatEnd
+  };
+  const CHAT_OWN = ['logout', 'askid', 'register', 'tour', 'opendoc', 'event', 'available'];
+  const GREETING = /السلام عليكم|مرحبا|هلا\b|أهلا|اهلا|صباح|مساء|كيف (الحال|حالك|حالكم|انت|أنت|الأحوال)|شلونك|شخبارك|\b(hi|hello|hey|good (morning|evening))\b|how are you/i;
+  const modelChat = () => modelOn() && !!chatBrain;
+  function startFlow(name, raw) {                 // the model heard a request that is one of the chat's own conversations
+    chatClear();
+    return route(name === 'start_registration' ? 'register' : name === 'book_tour' ? 'tour' : 'event', raw, latin(raw).trim());
+  }
+  async function chatTurn(raw, firstAct) {
+    const c = CHATC, input = { type: 'text', text: String(raw).slice(0, 300) }, ok = () => true;
+    input.shown = redact(input.text);
+    const tr = Object.assign(trailStart(input), { src: 'chat', ui: CHATC, who: me() });
+    const before = helpFeed.querySelectorAll('.m.bot:not(.typing)').length;
+    /* a button that names the job ("clean my room") starts the turn with that tool; what follows is the rules brain's, as on the guest screen */
+    const fixed = firstAct && { name: 'rules', next: t => (t.steps && t.steps.length ? RULES.next(t) : firstAct) };
+    let offer0 = chatSession.offer, out = { steps: [] };
+    try {
+      out = await AG.agent.turn({
+        input, lang, brain: fixed || (modelChat() ? chatBrain : RULES), fallback: RULES,
+        snapshot: () => snapshot(c), facts: () => factsFor(c.b), alive: ok,
+        history: () => chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })),
+        run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok, c),
+        approve: (call, d) => askStaff(call, d, ok, c),
+        declined: (call, d) => saidNo(call, d, ok, c),
+        refuse: (call, d) => refuse(call, d, ok, c),
+        speak: (code, state, text) => (code === 'flow' ? startFlow(text, raw) : speak(code, state, ok, text, c)),
+        record: e => { if (offer0) { offer0 = false; chatSession.offer = false; } if (!tr.who) tr.who = me(); trailAdd(tr, e); },
+        onFallback: () => modelDown()
+      });
+    } catch (e) { out = { steps: [] }; }
+    chatClear();
+    const b = me(), last = chatTurns[chatTurns.length - 1];
+    if (b) remember(b, tr, out.steps, last ? last.agent : '');
+    if (cur && b && cur === b) stageRefresh();      // the guest screen shows the same booking: let it catch up
+    return helpFeed.querySelectorAll('.m.bot:not(.typing)').length > before;
+  }
+  async function chatDispatch(raw, wait) {
+    const it = intentOf(raw), b = me(), drop = () => { if (wait) wait.remove(); };
+    if (/^(فعالية ثانية|another event)$/i.test(it.q)) it.intent = 'event';
+    if (it.key) {                                   // a number signs the guest in; whatever else the message asked is answered after that
+      drop();
+      const rest = it.intent === 'login' ? '' : raw.replace(it.key, ' ').replace(/\s+/g, ' ').trim();
+      if (rest) H.pending = { raw: rest };
+      return login(it.key);
+    }
+    if (/^(لا|no\b)/i.test(it.q) && H.keep) { drop(); H.keep = null; return reply(__('تمام. بماذا أخدمك؟')); }
+    if (CHAT_OWN.includes(it.intent) || (it.intent === 'howto' && !(modelChat() && GREETING.test(it.q)))) { drop(); return route(it.intent, raw, it.q); }
+    if (!modelChat() && it.intent === 'other' && GREETING.test(it.q)) { drop(); return route('howto', raw, it.q); }      // no model: a greeting gets the list of what the chat can do
+    if (!b && ['clean', 'maint', 'mine'].includes(it.intent)) { drop(); return needLogin(raw); }
+    if (b && it.intent === 'maint' && /^(بلاغ صيانة|صيانة|[أا]بي صيانة|[أا]بغى صيانة|maintenance( report)?|report a fault)$/i.test(it.q)) {
+      drop(); H.flow = { name: 'maint', step: 'what', data: {} };
+      return reply(__('وش المشكلة بالضبط؟ مثلاً: المكيف لا يبرّد.'), [__('المكيف لا يعمل'), __('تسريب ماء'), __('الإنارة معطّلة'), __('إلغاء')]);
+    }
+    if (!b && it.intent !== 'prices' && !modelChat()) { drop(); reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
+    chatWait = wait;
+    const act = it.intent === 'clean' ? { tool: 'open_ticket', args: { kind: 'clean' }, intent: 'clean' }
+      : it.intent === 'maint' ? { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw.trim())) }, intent: 'maint' } : null;
+    if (!await chatTurn(raw, act)) { reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
+  }
   let helping = false;
   async function helpAsk(raw) {
     raw = String(raw).trim(); if (!raw || helping) return;
     helping = true;
     if (demoOn) takeOver();
     helpSay('user', raw);
-    const wait = el('div', 'm bot typing'); wait.append(el('i'), el('i'), el('i')); helpFeed.append(wait);
+    const wait = el('div', 'm bot typing'); wait.append(el('i'), el('i'), el('i')); helpFeed.append(wait); chatEnd();
     await sleep(380);
     const it = intentOf(raw);
     let handled = true;
-    if (H.flow && /^(إلغاء|الغاء|لا، شكراً|لا شكرا|فعالية ثانية|cancel|no,? thanks|another event)$/i.test(it.q)) {
-      const again = /فعالية|event/i.test(it.q); H.flow = null; wait.remove();
-      if (again) { H.flow = { name: 'event', step: null, data: {} }; eventNext(); } else reply(__('تمام، ألغيت. بماذا أخدمك؟'));
-    } else if (H.flow) {
-      wait.remove();
-      if (H.flow.name === 'reg') regInput(raw, it.q);
-      else if (H.flow.name === 'event') await eventInput(raw, it.q);
-      else if (H.flow.name === 'tour') tourInput(raw, it.q);
-      else if (H.flow.name === 'maint') { H.flow = null; callTeam('maint', raw); }
-    } else {
-      if (/^(فعالية ثانية|another event)$/i.test(it.q)) it.intent = 'event';
-      /* a greeting or small talk ("كيف الحال") is the model's to answer when there is one; the written rules only know "how do I use this" */
-      const was = it.intent;
-      if (ask && was === 'howto' && /السلام عليكم|مرحبا|هلا\b|أهلا|اهلا|صباح|مساء|كيف (الحال|حالك|حالكم|انت|أنت|الأحوال)|شلونك|شخبارك|\b(hi|hello|hey|good (morning|evening))\b|how are you/i.test(it.q)) it.intent = 'other';
-      if (it.intent === 'other' && ask) {
-        const ai = await intentByAi(raw);
-        if (!ai) it.intent = was;
-        else if (ai.intent !== 'other') it.intent = ai.intent;
-        else if (ai && ai.reply) { wait.remove(); reply(String(ai.reply).slice(0, 700)); helping = false; return; }
-      }
-      wait.remove();
-      if (it.intent === 'login') login(it.key);
-      else if (/^(لا|no\b)/i.test(it.q) && H.keep) { H.keep = null; reply(__('تمام. بماذا أخدمك؟')); }
-      else {
-        const out = route(it.intent, raw, it.q);
-        if (out === null) { handled = false; reply(__('ما فهمت طلبك تماماً. ') + CAN); }
-        else if (out && typeof out.then === 'function') await out;
-      }
-    }
+    try {
+      if (H.flow && /^(إلغاء|الغاء|لا، شكراً|لا شكرا|فعالية ثانية|cancel|no,? thanks|another event)$/i.test(it.q)) {
+        const again = /فعالية|event/i.test(it.q); H.flow = null; wait.remove();
+        if (again) { H.flow = { name: 'event', step: null, data: {} }; eventNext(); } else reply(__('تمام، ألغيت. بماذا أخدمك؟'));
+      } else if (H.flow) {
+        if (H.flow.name === 'maint') { H.flow = null; chatWait = wait; await chatTurn(raw, { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw)) }, intent: 'maint' }); }
+        else {
+          wait.remove();
+          if (H.flow.name === 'reg') regInput(raw, it.q);
+          else if (H.flow.name === 'event') await eventInput(raw, it.q);
+          else if (H.flow.name === 'tour') tourInput(raw, it.q);
+        }
+      } else handled = (await chatDispatch(raw, wait)) !== false;
+    } finally { wait.remove(); chatClear(); helping = false; }
     $('#helpAi').hidden = !ask;
-    helping = false; return handled;
+    return handled;
   }
   function helpOpen(on) {
     helpBox.hidden = !on; helpFab.setAttribute('aria-expanded', String(on));
