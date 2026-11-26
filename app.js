@@ -2125,9 +2125,13 @@
       else if (H.flow.name === 'maint') { H.flow = null; callTeam('maint', raw); }
     } else {
       if (/^(فعالية ثانية|another event)$/i.test(it.q)) it.intent = 'event';
+      /* a greeting or small talk ("كيف الحال") is the model's to answer when there is one; the written rules only know "how do I use this" */
+      const was = it.intent;
+      if (ask && was === 'howto' && /السلام عليكم|مرحبا|هلا\b|أهلا|اهلا|صباح|مساء|كيف (الحال|حالك|حالكم|انت|أنت|الأحوال)|شلونك|شخبارك|\b(hi|hello|hey|good (morning|evening))\b|how are you/i.test(it.q)) it.intent = 'other';
       if (it.intent === 'other' && ask) {
         const ai = await intentByAi(raw);
-        if (ai && ai.intent !== 'other') it.intent = ai.intent;
+        if (!ai) it.intent = was;
+        else if (ai.intent !== 'other') it.intent = ai.intent;
         else if (ai && ai.reply) { wait.remove(); reply(String(ai.reply).slice(0, 500)); helping = false; return; }
       }
       wait.remove();
