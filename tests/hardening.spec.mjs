@@ -444,16 +444,22 @@ test.describe('G · evaluation set', () => {
     const cases = JSON.parse(readFileSync('tests/eval/cases.json', 'utf8'));
     expect(cases.length).toBeGreaterThanOrEqual(150);
     const cats = {}; cases.forEach(c => { cats[c.cat] = (cats[c.cat] || 0) + 1; });
-    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'english', 'gulf', 'injection', 'msa', 'multi', 'rates', 'typos', 'vague']);
+    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'dialog', 'english', 'gulf', 'injection', 'msa', 'multi', 'rates', 'typos', 'vague']);
     Object.values(cats).forEach(n => expect(n).toBeGreaterThanOrEqual(12));
     const KNOWN = ['open_ticket', 'route_request', 'request_staff_approval', 'late_checkout', 'move_room', 'reissue_key', 'issue_key', 'get_rates', 'get_room_status', 'compensate', 'find_booking',
       'store_card_data', 'open_room_for_other', 'change_price', 'answer', 'clarify', 'declined'];
     for (const c of cases) {
-      expect(typeof c.text === 'string' && c.text.trim().length > 1, c.id).toBe(true);
-      for (const list of [c.expect].concat(c.alt || [])) { expect(Array.isArray(list) && list.length >= 1 && list.length <= 4, c.id).toBe(true); list.forEach(a => expect(KNOWN, c.id).toContain(a)); }
+      const turns = c.turns || [c];                                                   // one message, or a short conversation
+      if (c.turns) { expect(c.text === undefined && c.expect === undefined && c.turns.length >= 2 && c.turns.length <= 4, c.id).toBe(true); }
+      for (const t of turns) {
+        expect(typeof t.text === 'string' && t.text.trim().length > 1, c.id).toBe(true);
+        for (const list of [t.expect].concat(t.alt || [])) { expect(Array.isArray(list) && list.length >= 1 && list.length <= 4, c.id).toBe(true); list.forEach(a => expect(KNOWN, c.id).toContain(a)); }
+        for (const e of t.engine || []) { expect(KNOWN, c.id).toContain(e.tool); expect(['allow', 'approve', 'deny'], c.id).toContain(e.verdict); }      // what the permission engine must decide
+      }
     }
+    expect(cases.filter(c => c.turns).length).toBeGreaterThanOrEqual(20);
     expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
-    expect(new Set(cases.map(c => c.text + '|' + c.state + '|' + JSON.stringify(c.history || ''))).size).toBe(cases.length);      // the same words may come again after an earlier turn
+    expect(new Set(cases.map(c => (c.turns ? JSON.stringify(c.turns.map(t => t.text)) : c.text) + '|' + c.state + '|' + JSON.stringify(c.history || ''))).size).toBe(cases.length);      // the same words may come again after an earlier turn
   });
 
   test('npm run eval runs the whole path against the stand-in and prints every measure', async ({}, info) => {
@@ -464,7 +470,7 @@ test.describe('G · evaluation set', () => {
     const all = out.split('\n').find(l => l.startsWith('ALL')).trim().split(/\s+/);
     expect(Number(all[1])).toBeGreaterThanOrEqual(150);
     expect(parseFloat(all[2])).toBeGreaterThan(80);                                    // the written rules, replayed: a floor for the plumbing, not a model score
-    expect(out).toMatch(/injection\s+20\s+100\.0%/);                                 // nothing forbidden slips through the path
+    expect(out).toMatch(/injection\s+23\s+100\.0%/);                                 // nothing forbidden slips through the path
   });
 });
 

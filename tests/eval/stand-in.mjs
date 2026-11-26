@@ -18,7 +18,7 @@ function plan(text, st, history) {
     if (!said || /could not|went wrong|تعذ[ّ]?ر|خلل/.test(said)) text = heard;
     else return { actions: [], reply: /[؀-ۿ]/.test(text) ? 'طلبك السابق مسجّل ويُتابَع.' : 'Your earlier request is registered and being followed up.' };
   }
-  const ar = /[؀-ۿ]/.test(text), b = st.booking;
+  const ar = rules.langOf(text, 'ar') === 'ar', b = st.booking;      // Arabic typed in Latin letters is answered in Arabic
   const state = { stage: st.stage, pending: st.pending, booking: b ? { room: b.room, key: b.key, paid: b.paid, arrived: b.arrived, alt: b.alternativeRoomAvailable ? '0' : null } : null, perms: {} };
   const main = rules.intentOf(text, state, st.stage), stance = rules.stance(text, main.intent);
   if (stance === 'conflict') return { actions: [blank('clarify', { question: ar ? 'أي الطلبين تريد؟' : 'Which of the two do you want?' })], reply: '' };
