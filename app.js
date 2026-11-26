@@ -703,6 +703,7 @@
     maint: __('عطل في الغرفة'), bill: __('يسأل عن فاتورته'), rates: __('يسأل عن الأسعار'), status: __('يسأل عن جاهزية غرفته'), mine: __('يسأل عن حجزه'),
     requests: __('طلبات للإقامة'), other: __('ملاحظة للاستقبال'), apology: __('اعتذار عن الإزعاج'), answer: __('سؤال عام يُجاب من بيانات الفندق'), fallback: __('بديل بعد قرار الموظف'), offer_move: __('عرض غرفة بديلة'),
     paid: __('النزيل أتمّ الدفع'), choice: __('ردّ على عرض المساعد'), confirmed: __('النزيل أكّد الإجراء'), confirm_no: __('النزيل ألغى الإجراء'),
+    clarify: __('رسالة تحتاج توضيحاً'), unhandled: __('في الرسالة أكثر من طلب'),
     register: __('يريد التسجيل كنزيل جديد'), event: __('يريد حجز قاعة أو فعالية'), tour: __('يريد جولة استكشافية')
   };
   const WHY = {                                    // why the code said no
@@ -725,7 +726,8 @@
 
   /* ---------- the trail: on the guest screen as it happens, and in the store for the admin console ---------- */
   let turnN = 0;
-  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), heard: heardOf(input), node: null, rows: {}, intent: null, src: 'stage', ui: STAGE }; }
+  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), heard: heardOf(input), node: null, rows: {}, intent: null, intents: [], src: 'stage', ui: STAGE }; }
+  const AFTER = ['apology', 'fallback', 'next_step', 'offer_move', 'unhandled'];      // steps the agent adds on its own; the rest is what the guest asked for
   function trailNode(tr) {
     if (tr.node || !tr.ui) return;
     const box = el('div', 'm trail'), head = el('div', 'trail-head');
@@ -735,9 +737,10 @@
   }
   function trailAdd(tr, e) {
     if (e.intent && !tr.intent) tr.intent = e.intent;
+    if (e.intent && !AFTER.includes(e.intent) && !tr.intents.includes(e.intent)) tr.intents.push(e.intent);
     if (tr.ui) {
       trailNode(tr);
-      tr.under.replaceChildren(el('b', '', __('فهمت: ')), INTENT_LABEL[tr.intent] || INTENT_LABEL.other);
+      tr.under.replaceChildren(el('b', '', __('فهمت: ')), (tr.intents.length ? tr.intents : [tr.intent]).map(i => INTENT_LABEL[i] || INTENT_LABEL.other).join(__('، ')));      // a plan of several actions names each
       tr.brainTag.textContent = e.brain === 'model' ? __('عقل النموذج') : __('عقل القواعد');
       if (e.kind === 'limit') tr.list.append(el('li', 'stop', __('توقفت: بلغت الحد الأقصى للخطوات في الرسالة.')));
       if (e.kind === 'tool') {
@@ -1003,9 +1006,16 @@
     c.session.confirm = kept.length ? kept : null;
     if (kept.length && ok()) await c.bot(confirmText(kept), ok);
   }
+  /* what a message can ask for, as the guest would name it: used when the rules brain says which parts it left */
+  const PART = {
+    refund: __('استرجاع المبلغ'), comp: __('التعويض'), move: __('تغيير الغرفة'), late: __('تأخير المغادرة'), code: __('رمز الدخول'), give_key: __('المفتاح'),
+    clean: __('تنظيف الغرفة'), maint: __('بلاغ العطل'), requests: __('طلبات الإقامة'), bill: __('الفاتورة'), rates: __('الأسعار'), status: __('جاهزية الغرفة')
+  };
   async function speak(code, state, ok, text, c = STAGE) {
     const b = c.b;
     switch (code) {
+      case 'clarify': return c.bot(fill(__('في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟'), { what: PART[text] || '' }), ok);
+      case 'unhandled': return c.bot(fill(__('نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.'), { what: String(text || '').split(',').map(p => PART[p]).filter(Boolean).join(__('، ')) }), ok);
       case 'confirm_no': return c.bot(__('تمام، لم أنفّذ شيئاً.'), ok);
       case 'free': return text ? c.bot(redact(text), ok) : true;      // a model's own words: only ever an answer, never an action
       case 'ask_requests': return c.bot(__('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok);

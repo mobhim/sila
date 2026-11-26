@@ -131,3 +131,7 @@ export async function playModel(page, answer) {
   return calls;
 }
 export const modelReady = page => expect(page.locator('#aiTag')).toHaveJSProperty('hidden', false);      // the label may sit in the phone's other tab
+/* what the agent task answers with: a plan of actions, or a plain reply */
+export const ACT = (tool, extra) => Object.assign({ tool, items: [], via: null, kind: null, scope: null, requested: null, note: '', question: '' }, extra);
+export const planOf = (...actions) => ({ actions, reply: '' });
+export const replyOf = reply => ({ actions: [], reply });

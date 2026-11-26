@@ -994,5 +994,19 @@ window.SILA_EN = {
   "لا، ألغِ": "No, cancel",
   "المساعد ينتظر تأكيدك قبل التنفيذ.": "The assistant is waiting for your confirmation before acting.",
   "نعم": "Yes",
-  "لا": "No"
+  "لا": "No",
+  "رسالة تحتاج توضيحاً": "A message that needs clarifying",
+  "في الرسالة أكثر من طلب": "More than one request in the message",
+  "استرجاع المبلغ": "the refund",
+  "التعويض": "the compensation",
+  "تغيير الغرفة": "the room change",
+  "رمز الدخول": "the access code",
+  "تنظيف الغرفة": "the room cleaning",
+  "بلاغ العطل": "the fault report",
+  "طلبات الإقامة": "the requests for your stay",
+  "الفاتورة": "the bill",
+  "الأسعار": "the rates",
+  "جاهزية الغرفة": "the room’s readiness",
+  "في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟": "Your message both asks for and rules out {what}. I did not do anything. Which one do you want?",
+  "نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.": "I handled one request from your message. Still not handled: {what}. Send each one as its own message and I will do it."
 };

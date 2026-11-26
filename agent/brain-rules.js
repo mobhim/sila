@@ -80,6 +80,36 @@
     return { intent: 'other' };
   }
 
+  /* ---------- one message, several things ----------
+     This brain acts on one intent per message. It still reads the others, so that it can tell the guest which parts it left
+     (they are never dropped silently), and so that "move me, but do not change my room" is asked about instead of carried out. */
+  const PARTS = ['refund', 'comp', 'move', 'late', 'code', 'give_key', 'clean', 'maint', 'requests', 'bill', 'rates', 'status'];
+  const SPLIT = /[،,.؛;\n!؟?]+|\s+(?:and|also|plus|then|but|however|though|&|ثم|كمان|وبعدين|بعدين|بس|لكن)\s+|\s+و(?=[\u0621-\u064A])/i;
+  const NO = '(?:^|\\s)(?:لا|ما|مو|لن|بدون|don[’\']?t|do not|not|never|without|no)\\s+(?:\\S+\\s+){0,2}?';
+  const NEG = {
+    move: new RegExp(NO + '(?:تنقل|تغي[ّ]?ر|[أا]نتقل|[أا]غي[ّ]?ر|نقل|move|change|switch)', 'i'),
+    late: new RegExp(NO + '(?:(?:ت[أا]خ[ّ]?ر|تمد[ّ]?د|ت[أا]خير|تمديد)\\S*\\s+(?:\\S+\\s+)?(?:ال)?مغادر|extend|delay)', 'i'),
+    refund: new RegExp(NO + '(?:تلغ|تسترجع|ترجع|استرجاع|[إا]لغاء|cancel|refund)', 'i'),
+    comp: new RegExp(NO + '(?:تعو[ّ]?ض|تعويض|compensat)', 'i')
+  };
+  const pieces = raw => latin(raw).split(SPLIT).map(s => (s || '').trim()).filter(Boolean);
+  /* 'conflict': the message asks for the intent and, in another clause, for its opposite · 'refused': it only asks not to */
+  function stance(raw, intent) {
+    const neg = NEG[intent]; if (!neg) return 'asked';
+    const cl = pieces(raw), no = cl.filter(c => neg.test(c)), yes = cl.filter(c => !neg.test(c) && RE[intent].test(c));
+    return no.length ? (yes.length ? 'conflict' : 'refused') : 'asked';
+  }
+  /* the other things the message asks for, besides the one this brain acts on */
+  function others(raw, state, at, main) {
+    if (!state.booking || at === 'identify' || !PARTS.includes(main)) return [];
+    const out = [];
+    for (const c of pieces(raw)) {
+      const i = intentOf(c, state, at).intent;
+      if (i !== main && PARTS.includes(i) && !out.includes(i) && stance(c, i) === 'asked') out.push(i);
+    }
+    return out;
+  }
+
   const eligible = state => { const b = state.booking; return !!(b && b.paid && !b.comp && !b.refunded && state.perms.limit > 0); };
 
   /* the arrival is a line of steps; this moves the guest to the next one they have not done yet */
@@ -117,7 +147,9 @@
       }
       return DONE;
     }
-    const it = intentOf(input.text, state, input.at), i = it.intent;
+    const it = intentOf(input.text, state, input.at), i = it.intent, st = stance(input.text, i);
+    if (st === 'conflict') return Object.assign(say('clarify', 'clarify'), { text: i });      // a request and its opposite: ask, do not guess
+    if (st === 'refused') return say('confirm_no', i);                                       // "do not move me" is not a move
     switch (i) {
       case 'card': return call('store_card_data', {}, i);
       case 'other_room': return call('open_room_for_other', it.room ? { room: it.room } : {}, i);
@@ -181,14 +213,19 @@
   }
 
   function next(turn) {
-    const steps = turn.steps || [], kept = turn.state.confirm || [];
+    const steps = turn.steps || [], kept = turn.state.confirm || [], input = turn.input;
     if (steps.length && steps[0].intent === 'confirmed' && kept.length > 1) {      // several kept calls, one yes: each is proposed in its turn
       const n = steps.filter(s => s.intent === 'confirmed').length;
       return n < kept.length ? call(kept[n].tool, kept[n].args, 'confirmed') : DONE;
     }
-    return steps.length ? follow(turn.input, turn.state, steps) : first(turn.input, turn.state);
+    const a = steps.length ? follow(input, turn.state, steps) : first(input, turn.state);
+    if (input.type !== 'text') return a;
+    if (!steps.length) { const main = intentOf(input.text, turn.state, input.at).intent; input.rest = a.say === 'clarify' ? [] : others(input.text, turn.state, input.at, main); }
+    if (!input.rest || !input.rest.length || steps.some(s => s.say === 'unhandled')) return a;
+    if (a.done) return Object.assign(say('unhandled', 'unhandled'), { text: input.rest.join(',') });      // say which parts were left, rather than drop them
+    return a.say && a.end !== false ? Object.assign({}, a, { end: false }) : a;
   }
 
   SILA.brains = SILA.brains || {};
-  SILA.brains.rules = Object.freeze({ name: 'rules', next, intentOf, splitRequests, kindOf, latin });
+  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, splitRequests, kindOf, latin });
 })(typeof window !== 'undefined' ? window : globalThis);

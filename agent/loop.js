@@ -37,7 +37,7 @@
       if (!act || act.done) break;
 
       if (act.say) {
-        const step = { n, say: String(act.say), intent: act.intent, brain: act.by || brain.name };
+        const step = { n, say: String(act.say), intent: act.intent, brain: act.by || brain.name, text: act.text };
         steps.push(step); o.record(Object.assign({ kind: 'say' }, step));
         await o.speak(step.say, state, act.text);
         if (!o.alive()) return { steps, stopped: true };
