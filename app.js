@@ -358,7 +358,7 @@
     const API = API_URL;
     const remote = {
       async json(prompt, opts, task, input) {
-        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 11000);      // the server gives up at about 9 seconds; past that the rules answer
         try {
           const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task, lang, input }), signal: ctl.signal });
           if (r.status === 503) throw Object.assign(new Error('ai off'), { code: 'capability_disabled' });
