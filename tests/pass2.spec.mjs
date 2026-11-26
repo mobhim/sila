@@ -321,3 +321,67 @@ for (const lang of LANGS) {
     });
   });
 }
+
+for (const lang of LANGS) {
+  test.describe('G · hall and tour conversations take an aside · ' + lang, () => {
+    const TYPE = T(lang, 'وش نوع الفعالية؟', 'What kind of event?'), HOWMANY = T(lang, 'كم عدد الحضور المتوقع؟', 'How many attendees do you expect?'), WHEN = T(lang, 'متى يناسبك تزور القاعة؟', 'When would you like to visit the hall?');
+    const bots = page => page.locator('#helpFeed .m.bot:not(.typing)');
+    const said = async (page, text) => { const n = await bots(page).count(); await chatSend(page, text); await expect.poll(() => bots(page).count()).toBeGreaterThan(n); await expect(page.locator('#helpInput')).toBeEnabled(); };
+
+    test('with no model: a greeting is returned, a question is answered from the hall data, and the same step is asked again with nothing lost', async ({ page }) => {
+      const errors = watch(page);
+      await open(page, 'index.html', lang);
+      await page.locator('#helpFab').click();
+      await said(page, T(lang, 'أبغى أحجز قاعة', 'I want to book a hall'));
+      await expect(chatLast(page)).toHaveText(TYPE);
+      await said(page, T(lang, 'السلام عليكم', 'hello'));
+      await expect(bots(page).nth(-2)).toHaveText(T(lang, 'أهلاً بك.', 'Welcome.'));
+      await expect(chatLast(page)).toHaveText(TYPE);                                    // the same step, asked again
+      await said(page, T(lang, 'وش القاعات اللي عندكم؟', 'What halls do you have?'));
+      await expect(bots(page).nth(-2)).toContainText(T(lang, 'قاعة الندى الكبرى', 'Al Nada Grand Hall'));
+      await expect(bots(page).nth(-2)).toContainText('29,000');                         // from the hall data, not made up
+      await expect(chatLast(page)).toHaveText(TYPE);
+      await page.locator('#helpChips .chip').first().click();                           // now the answer to the step
+      await expect(chatLast(page)).toHaveText(HOWMANY);
+      await said(page, T(lang, 'كيف أعرف السعة المناسبة؟', 'How do I know which size fits?'));
+      await expect(chatLast(page)).toHaveText(HOWMANY);                                 // the event type chosen above is kept: this is still the second step
+      await said(page, '200');
+      await said(page, T(lang, 'تخطّي', 'skip'));
+      await expect(chatLast(page)).toContainText('200');                                // the proposal, for the 200 attendees given before
+      /* the tour */
+      await said(page, T(lang, 'احجز جولة استكشافية', 'Book a site tour'));
+      await expect(chatLast(page)).toHaveText(WHEN);
+      await said(page, T(lang, 'مساء الخير', 'good evening'));
+      await expect(chatLast(page)).toHaveText(WHEN);
+      await said(page, T(lang, 'هل القاعة قريبة من المدخل؟', 'Is the hall close to the entrance?'));
+      await expect(bots(page).nth(-2)).toContainText('29,000');
+      await expect(chatLast(page)).toHaveText(WHEN);
+      await said(page, T(lang, 'غداً 10 صباحاً', 'Tomorrow 10 AM'));                    // a time is an answer, even with «صباحاً» in it
+      await said(page, T(lang, 'ريم السالم', 'Reem Alsalem'));
+      await said(page, '0555512345');
+      await expect(chatLast(page)).toContainText(T(lang, 'غداً 10 صباحاً', 'Tomorrow 10 AM'));
+      await expect(chatLast(page)).toContainText(T(lang, 'ريم السالم', 'Reem Alsalem'));
+      if (lang === 'en') await noArabic(page);
+      await noSideScroll(page);
+      expect(errors).toEqual([]);
+    });
+
+    test('with a model: the question is answered from the hotel data it is given, which now holds the halls, and the step is asked again', async ({ page }) => {
+      const answer = T(lang, 'أكبر قاعاتنا قاعة الندى الكبرى، ويومها الكامل 29000 ريال.', 'Our largest hall is the grand hall, at 29000 riyals for a full day.');
+      const calls = await playModel(page, () => replyOf(answer));
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await page.locator('#helpFab').click();
+      await said(page, T(lang, 'أبغى أحجز قاعة', 'I want to book a hall'));
+      await expect(chatLast(page)).toHaveText(TYPE);
+      await said(page, T(lang, 'وش أكبر قاعة عندكم؟', 'Which is your largest hall?'));
+      await expect(bots(page).nth(-2)).toHaveText(answer);
+      await expect(chatLast(page)).toHaveText(TYPE);
+      const sent = calls.filter(c => c.task === 'agent').pop();
+      expect(sent.input.hotel.halls.length).toBe(4);
+      expect(sent.input.hotel.halls.map(h => h.fullDayRate)).toContain(29000);
+      await page.locator('#helpChips .chip').first().click();
+      await expect(chatLast(page)).toHaveText(HOWMANY);
+    });
+  });
+}

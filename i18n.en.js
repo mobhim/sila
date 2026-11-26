@@ -1028,5 +1028,8 @@ window.SILA_EN = {
   "أكّده النزيل، وهو الآن بانتظار موظف": "Confirmed by the guest; now waiting for a staff member",
   "أكّده النزيل": "Confirmed by the guest",
   "ألغاه النزيل: لم يُنفَّذ": "Cancelled by the guest: not carried out",
-  "لم يؤكّده النزيل: لم يُنفَّذ": "Not confirmed by the guest: not carried out"
+  "لم يؤكّده النزيل: لم يُنفَّذ": "Not confirmed by the guest: not carried out",
+  "قاعاتنا: ": "Our halls: ",
+  " م²، ": " m², ",
+  " لليوم الكامل": " for a full day"
 };

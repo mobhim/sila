@@ -603,6 +603,7 @@
       rooms: CATS.map(c => { const mine = S.rooms.filter(r => r.cat === c.key); return mine.length ? { category: c.key, nightlyRate: rateNow(mine[0]), rooms: mine.length, vacantAndReady: mine.filter(r => r.state === 'ready' && !occupant(r.no)).length } : null; }).filter(Boolean),
       bill: b ? { nightlyRate: t.rate, nights: b.nights, total: money(t.total), paid: !!b.paid } : null,
       policies: POLICIES,
+      halls: HALLS.map(h => ({ name: h.name, areaSqm: h.w * h.d, fullDayRate: h.rate })),      // for a question asked while planning an event
       landmarks: LANDMARKS.map(c => ({ city: c[0], about: c[1], places: c[2].map(p => p[0] + ': ' + p[1]) }))
     };
   }
@@ -2135,15 +2136,41 @@
     if (step === 'confirm') return ASKING.test(q) && !/تأكيد|confirm/i.test(q);
     return GREETING.test(q) || ASKING.test(q);
   }
-  async function regAnswer(raw, q) {
-    let text = '';
-    if (modelChat()) {
-      try {
-        const act = await chatBrain.next({ input: { type: 'text', text: raw.slice(0, 300), shown: redact(raw.slice(0, 300)), at: 'identify' }, state: snapshot(CHATC), steps: [], lang: RULES.langOf(raw, CHATC.tongue || lang),
-          history: chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })) });
-        if (act && act.say === 'free' && act.text) text = redact(String(act.text)).slice(0, 600);
-      } catch (e) { modelDown(); }
+  /* what a model answers to an aside, from the hotel's data; '' when there is no model or its words were thrown away */
+  async function asideText(raw) {
+    if (!modelChat()) return '';
+    try {
+      const act = await chatBrain.next({ input: { type: 'text', text: raw.slice(0, 300), shown: redact(raw.slice(0, 300)), at: 'identify' }, state: snapshot(CHATC), steps: [], lang: RULES.langOf(raw, CHATC.tongue || lang),
+        history: chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })) });
+      return act && act.say === 'free' && act.text ? redact(String(act.text)).slice(0, 600) : '';
+    } catch (e) { modelDown(); return ''; }
+  }
+  /* the hall and tour conversations take an aside the same way: a greeting or a question is answered, and the step asked again.
+     With no model, a question is answered from the hall data: the halls, their size and their full-day rate. */
+  const hallsLine = () => __('قاعاتنا: ') + HALLS.map(h => h.name + ' (' + h.w * h.d + __(' م²، ') + sar(h.rate) + __(' لليوم الكامل') + ')').join(__('، ')) + '.';
+  function flowAside(q, raw) {
+    const f = H.flow, step = f && f.step;
+    if (!f || !step || /^(إلغاء|الغاء|cancel)$/i.test(q)) return false;
+    if (f.name === 'event') {
+      if (step === 'type' && (Object.keys(EV_TYPES).some(k => q.includes(EV_TYPES[k].label)) || briefByRules(raw).type)) return false;
+      if ((step === 'n' || step === 'budget') && (/\d/.test(q) || /تخط|skip/i.test(q))) return false;
+    } else {
+      if (step === 'phone' && /\d/.test(q)) return false;
+      if (step === 'when' && /\d|غد|بكر|اليوم|السبت|الأحد|الاحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|tomorrow|today|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\b(am|pm)\b/i.test(q) && !/[?؟]/.test(q)) return false;      // a time is an answer, even with «صباحاً» in it
     }
+    return GREETING.test(q) || ASKING.test(q);
+  }
+  async function flowAnswer(raw, q) {
+    let text = await asideText(raw);
+    chatClear();
+    if (!H.flow) return;
+    if (!text && GREETING.test(q) && !ASKING.test(q)) text = __('أهلاً بك.');
+    if (!text) text = hallsLine();
+    helpSay('bot', text);
+    if (H.flow.name === 'event') eventNext(); else tourNext();      // the same step again: what was already answered is kept
+  }
+  async function regAnswer(raw, q) {
+    let text = await asideText(raw);
     chatClear();
     if (!text && GREETING.test(q) && !ASKING.test(q)) text = __('أهلاً بك.');
     if (!text && H.flow.data.type && /سعر|بكم|price|rate|cost|how much/i.test(q)) { const r0 = freeOf(H.flow.data.type)[0]; if (r0) text = H.flow.data.type + ': ' + __('سعر الليلة ') + rateNow(r0) + __(' ر.س') + '.'; }
@@ -2374,8 +2401,10 @@
       } else if (H.flow) {
         if (H.flow.name === 'maint') { H.flow = null; chatWait = wait; await chatTurn(raw, { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw)) }, intent: 'maint' }); }
         else {
-          if (!(H.flow.name === 'reg' && regAside(it.q))) wait.remove();
-          if (H.flow.name === 'reg') { if (regAside(it.q)) { chatWait = wait; await regAnswer(raw, it.q); } else regInput(raw, it.q); }
+          const aside = H.flow.name === 'reg' ? regAside(it.q) : flowAside(it.q, raw);      // a greeting or a question, not an answer to the step
+          if (!aside) wait.remove(); else chatWait = wait;
+          if (aside) await (H.flow.name === 'reg' ? regAnswer : flowAnswer)(raw, it.q);
+          else if (H.flow.name === 'reg') regInput(raw, it.q);
           else if (H.flow.name === 'event') await eventInput(raw, it.q);
           else if (H.flow.name === 'tour') tourInput(raw, it.q);
         }
