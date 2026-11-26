@@ -1032,7 +1032,7 @@
         refuse: (call, d) => refuse(call, d, ok),
         speak: (code, state, text) => speak(code, state, ok, text),
         record: e => { if (offer0) { offer0 = false; session.offer = false; } trailAdd(tr, e); },
-        onFallback: () => modelDown()
+        onFallback: e => { if (!e || !e.soft) modelDown(); }
       });
     } finally { turning = false; }
     const said = saying.join(' '); saying = null;
@@ -2121,7 +2121,7 @@
         refuse: (call, d) => refuse(call, d, ok, c),
         speak: (code, state, text) => (code === 'flow' ? startFlow(text, raw) : speak(code, state, ok, text, c)),
         record: e => { if (offer0) { offer0 = false; chatSession.offer = false; } if (!tr.who) tr.who = me(); trailAdd(tr, e); },
-        onFallback: () => modelDown()
+        onFallback: e => { if (!e || !e.soft) modelDown(); }
       });
     } catch (e) { out = { steps: [] }; }
     chatClear();

@@ -7,6 +7,8 @@
      are matched by the written rules in this browser and never sent to a model at all.
    - What happens after a tool has answered (the next tool, the next step of the arrival) is the rules brain's work.
    - It only ever proposes. The permission engine decides, and amounts are computed by the page.
+   - A free answer is read before it is shown: its numbers must come from the hotel's data (grounded), and it may not say
+     that something was done, approved, refunded, moved, issued, opened, cancelled or compensated (agent/claims.js).
    If the server is down, slow, out of quota or answers with something that does not fit, next() throws and the loop
    carries on with the rules brain in the same turn. */
 (root => {
@@ -15,7 +17,7 @@
   const INTENT = { route_request: 'requests', issue_key: 'give_key', reissue_key: 'code', move_room: 'move', late_checkout: 'late', compensate: 'comp', request_staff_approval: 'refund',
     get_room_status: 'status', find_booking: 'mine', store_card_data: 'card', open_room_for_other: 'other_room', change_price: 'price' };
   const FLOW = { start_registration: 'register', plan_event: 'event', book_tour: 'tour' };
-  const fail = why => { throw new Error('model brain: ' + why); };
+  const fail = (why, soft) => { throw Object.assign(new Error('model brain: ' + why), { soft: !!soft }); };      // soft: the model answered, but its words were thrown away
 
   /* every number of three digits or more in a free answer must be one the hotel's code supplied */
   function grounded(reply, facts) {
@@ -43,7 +45,8 @@
         if (t === 'none') {
           const reply = String(out.reply || '').trim().slice(0, 600);
           if (!reply) fail('empty reply');
-          if (!grounded(reply, [hotel, b ? b.room : ''])) fail('a number the hotel did not supply');
+          if (!grounded(reply, [hotel, b ? b.room : ''])) fail('a number the hotel did not supply', true);
+          if (!SILA.claims.check(reply, steps).ok) fail('a claim that nothing in this turn backs', true);      // "your refund is approved", with no tool behind it
           return { say: 'free', text: reply, intent: 'answer', end: true };
         }
         if (o.flows && o.flows.includes(t)) return { say: 'flow', text: t, intent: FLOW[t], end: true };      // one of the chat window's own conversations

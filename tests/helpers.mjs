@@ -106,3 +106,28 @@ export async function ask(page, text, o) {
 }
 export const idle = page => expect(page.locator('#askInput')).toBeEnabled();      // the agent has finished its turn
 export const lastTrail = page => page.locator('#feed .m.trail').last();
+
+/* the optional model brain, without a model: the page is given an API address and the test plays the server.
+   answer(body, n) returns the output for that request, a status number, or 'abort'. Every POST is kept in the returned list. */
+export const MODEL_API = 'https://model.test/api/ask';
+export async function playModel(page, answer) {
+  const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
+  const calls = [];
+  await page.route(/\/sila\/(index|admin)\.html/, async route => {
+    const r = await route.fetch();
+    await route.fulfill({ response: r, body: (await r.text()).replace('<meta name="sila-api" content="">', '<meta name="sila-api" content="' + MODEL_API + '">') });
+  });
+  await page.route(MODEL_API, async route => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    if (req.method() === 'GET') return route.fulfill({ status: 200, headers: CORS, contentType: 'application/json', body: JSON.stringify({ ok: true, ai: true }) });
+    const body = JSON.parse(req.postData());
+    calls.push(body);
+    const out = await answer(body, calls.length);
+    if (out === 'abort') return route.abort();
+    if (typeof out === 'number') return route.fulfill({ status: out, headers: CORS, contentType: 'application/json', body: JSON.stringify({ error: 'x' }) });
+    return route.fulfill({ status: 200, headers: CORS, contentType: 'application/json', body: JSON.stringify({ output: out }) });
+  });
+  return calls;
+}
+export const modelReady = page => expect(page.locator('#aiTag')).toHaveJSProperty('hidden', false);      // the label may sit in the phone's other tab
