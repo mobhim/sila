@@ -161,12 +161,15 @@
     return out;
   }
 
-  /* what never goes to a model: the three forbidden things, a number that identifies, a bare yes or no to an offer, and a question
-     about tonight's rates or the guest's own bill when it is all the message asks. The code answers those, with its own numbers. */
-  const LOCAL = ['card', 'other_room', 'price', 'identify', 'choice'], MONEY = ['rates', 'bill'];
+  /* what never goes to a model: the three forbidden things, a number that identifies, a bare yes or no to an offer, and, when it is
+     all the message asks, a question about tonight's rates, the guest's own bill, or the check-out, tax or refund policy.
+     The code answers those, with its own numbers and the hotel's own sentences. */
+  const LOCAL = ['card', 'other_room', 'price', 'identify', 'choice'], MONEY = ['rates', 'bill'], POLICY = ['checkout', 'tax', 'refunds'];
   function local(raw, state, at) {
-    const i = intentOf(raw, state, at).intent;
-    return LOCAL.includes(i) || (MONEY.includes(i) && !others(raw, state, at, i).length);
+    const it = intentOf(raw, state, at), i = it.intent;
+    if (LOCAL.includes(i)) return true;
+    if (i === 'info') return POLICY.includes(it.topic) && !others(raw, state, at, 'bill').length;      // a policy question has one answer: the hotel's own sentence
+    return MONEY.includes(i) && !others(raw, state, at, i).length;
   }
 
   const eligible = state => { const b = state.booking; return !!(b && b.paid && !b.comp && !b.refunded && state.perms.limit > 0); };

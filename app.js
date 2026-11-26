@@ -677,7 +677,7 @@
     let text = null;
     if (lines.length && brain && brain.compose && modelOn() && planned.some(s => !s.held)
       && !steps.some(s => s.say === 'free' || (s.verdict === 'deny' && s.tier === 'never'))) {      // a never-tier refusal is said in the hotel's own words, always
-      try { text = await brain.compose({ input, steps, said: lines.map(m => m.t), facts: c.b ? c.b.room : '' }); } catch (e) { modelDown(); }
+      try { text = await brain.compose({ input, steps, said: lines.map(m => m.t), facts: c.b ? c.b.room : '', paid: c.b ? !!c.b.paid : undefined }); } catch (e) { modelDown(); }
     }
     if (!text || !ok()) return release(c, ok);
     c.buf = null;
