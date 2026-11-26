@@ -93,7 +93,7 @@
   if (!ADMIN) save();
 
   const VAT = 0.15, STATE = { ready: __('جاهز'), prep: __('قيد التجهيز'), maint: __('صيانة') }, NEXT = { ready: 'prep', prep: 'maint', maint: 'ready' };
-  const TIER = { auto: __('تلقائي'), limit: __('ضمن الحد'), staff: __('موظف'), wait: __('بانتظار موافقة'), ok: __('بموافقة موظف'), no: __('مرفوض'), never: __('ممنوع') };
+  const TIER = { auto: __('تلقائي'), limit: __('ضمن الحد'), staff: __('موظف'), wait: __('بانتظار موافقة'), ok: __('بموافقة موظف'), no: __('مرفوض'), never: __('ممنوع'), ask: __('تأكيد النزيل') };
   const roomOf = b => S.rooms.find(r => r.no === b.room);
   const occupant = no => S.bookings.find(b => b.room === no);
   const altFor = b => { const r = roomOf(b); return r && S.rooms.find(x => x.no !== r.no && x.cat === r.cat && x.state === 'ready' && !occupant(x.no)); };
@@ -650,8 +650,8 @@
      Everything the brain is shown comes from snapshot(), and everything the engine decides on comes from factsFor(): both are
      built here from the hotel's data, never from what the guest typed. */
   const fill = (s, o) => s.replace(/\{(\w+)\}/g, (m, k) => (o[k] == null ? '' : o[k]));
-  const session = { reqDone: false, waiting: false, offer: false };
-  const resetSession = () => { session.reqDone = false; session.waiting = false; session.offer = false; };
+  const session = { reqDone: false, waiting: false, offer: false, confirm: null };
+  const resetSession = () => { session.reqDone = false; session.waiting = false; session.offer = false; session.confirm = null; };
   /* the agent serves two surfaces with the same tools: the guest screen and the chat window. Each has its own booking, its own
      offer on the table and its own place to speak; a tool is handed the surface its turn belongs to (the chat's is CHATC, below). */
   const STAGE = {
@@ -674,7 +674,8 @@
     const b = c.b, r = b && roomOf(b), alt = b && altFor(b), stage = stageOf(b, c);
     return {
       stage, waiting: c.session.waiting,
-      pending: c.session.offer ? 'move_offer' : c.stage && stage === 'readiness' && !c.session.waiting ? 'room_choice' : null,
+      pending: c.session.confirm ? 'confirm' : c.session.offer ? 'move_offer' : c.stage && stage === 'readiness' && !c.session.waiting ? 'room_choice' : null,
+      confirm: c.session.confirm || null,           // calls a model proposed, kept until the guest says yes
       booking: b ? { room: b.room, category: r ? r.cat : '', cat: r ? r.cat : '', nights: b.nights, arrived: !!b.arrivedAt, paid: !!b.paid, key: b.key || null, late: !!b.late,
         comp: b.comp || 0, refunded: !!b.refunded, roomState: r ? r.state : 'ready', alt: alt ? alt.no : null } : null,
       perms: { reissue: !!S.perms.reissue, ticket: !!S.perms.ticket, move: !!S.perms.move, late: !!S.perms.late, limit: S.perms.limit }
@@ -701,7 +702,7 @@
     comp: __('يطلب تعويضاً'), move: __('يطلب تغيير الغرفة'), late: __('يطلب تأخير المغادرة'), code: __('رمز الدخول لا يعمل'), clean: __('الغرفة تحتاج تنظيفاً'),
     maint: __('عطل في الغرفة'), bill: __('يسأل عن فاتورته'), rates: __('يسأل عن الأسعار'), status: __('يسأل عن جاهزية غرفته'), mine: __('يسأل عن حجزه'),
     requests: __('طلبات للإقامة'), other: __('ملاحظة للاستقبال'), apology: __('اعتذار عن الإزعاج'), answer: __('سؤال عام يُجاب من بيانات الفندق'), fallback: __('بديل بعد قرار الموظف'), offer_move: __('عرض غرفة بديلة'),
-    paid: __('النزيل أتمّ الدفع'), choice: __('ردّ على عرض المساعد'),
+    paid: __('النزيل أتمّ الدفع'), choice: __('ردّ على عرض المساعد'), confirmed: __('النزيل أكّد الإجراء'), confirm_no: __('النزيل ألغى الإجراء'),
     register: __('يريد التسجيل كنزيل جديد'), event: __('يريد حجز قاعة أو فعالية'), tour: __('يريد جولة استكشافية')
   };
   const WHY = {                                    // why the code said no
@@ -712,6 +713,7 @@
     target_unavailable: __('لا غرفة بديلة جاهزة من نفس الفئة'), refunded: __('المبلغ مُسترجع'), no_contact: __('لا وسيلة تواصل على الحجز')
   };
   const verdictOf = e => {                         // [tag class, tag text, plain sentence]
+    if (e.held) return ['ask', TIER.ask, __('اقتراح من النموذج: لا يُنفَّذ قبل تأكيد النزيل')];
     if (e.verdict === 'deny') return e.tier === 'never' ? ['never', TIER.never, WHY[e.code] || WHY.forbidden] : ['no', TIER.no, WHY[e.code] || ''];
     if (e.verdict === 'approve') {
       if (e.waiting) return ['wait', TIER.wait, __('يتجاوز صلاحياتي: بانتظار موظف')];
@@ -985,9 +987,26 @@
       : __('هذا خارج ما أستطيع تنفيذه. حوّل طلبك لموظف الاستقبال إن أردت.');
     await c.bot(text, ok);
   }
+  /* ---------- a call a model proposed waits for the guest's yes ---------- */
+  const viaText = v => (v === 'card' ? __('بطاقة من الاستقبال') : v === 'email' ? __('رمز بالبريد') : __('رمز برسالة SMS'));
+  const confirmWhat = list => list.map(k => {
+    const a = k.args || {};
+    return k.tool === 'move_room' ? fill(__('النقل إلى الجناح {to} من نفس الفئة وبنفس السعر'), { to: a.to })
+      : k.tool === 'late_checkout' ? __('تأخير مغادرتك ساعة إلى 1:00 ظهراً')
+      : k.tool === 'compensate' ? __('تسجيل طلب تعويض يحسب نظام الفندق مبلغه')
+      : k.tool === 'reissue_key' ? (a.via === 'card' ? __('تبديل مفتاحك ببطاقة من الاستقبال') : __('إلغاء رمز الدخول الحالي وإصدار رمز جديد'))
+      : fill(__('إصدار مفتاح جناحك ({via})'), { via: viaText(a.via) });
+  }).join(__(' و', 'and'));
+  const confirmText = list => fill(__('قبل أن أنفّذ: هل تريد {what}؟ اكتب «نعم» للتأكيد أو «لا» للإلغاء.'), { what: confirmWhat(list) });
+  /* the end of a turn: what the turn kept for confirmation replaces whatever was kept before, and the guest is asked once */
+  async function closeTurn(c, kept, ok) {
+    c.session.confirm = kept.length ? kept : null;
+    if (kept.length && ok()) await c.bot(confirmText(kept), ok);
+  }
   async function speak(code, state, ok, text, c = STAGE) {
     const b = c.b;
     switch (code) {
+      case 'confirm_no': return c.bot(__('تمام، لم أنفّذ شيئاً.'), ok);
       case 'free': return text ? c.bot(redact(text), ok) : true;      // a model's own words: only ever an answer, never an action
       case 'ask_requests': return c.bot(__('هل لديك طلبات لإقامتك؟ اكتبها بكلامك وسأحوّل كل طلب للقسم المختص.'), ok);
       case 'no_requests': c.session.reqDone = true; return c.bot(__('لا توجد طلبات الآن. يمكنك طلب أي شيء لاحقاً.'), ok);
@@ -1022,6 +1041,7 @@
     saying = [];
     let offer0 = session.offer;                     // an offer on the table is answered by this turn, whatever the guest says
     let out = { steps: [] };
+    const kept = [];
     try {
       out = await AG.agent.turn({
         input, lang, brain: !auto && modelOn() && input.type === 'text' ? modelBrain : RULES, fallback: RULES,
@@ -1030,10 +1050,12 @@
         approve: (call, d) => askStaff(call, d, ok),
         declined: (call, d) => saidNo(call, d, ok),
         refuse: (call, d) => refuse(call, d, ok),
+        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args }); },
         speak: (code, state, text) => speak(code, state, ok, text),
         record: e => { if (offer0) { offer0 = false; session.offer = false; } trailAdd(tr, e); },
         onFallback: e => { if (!e || !e.soft) modelDown(); }
       });
+      if (ok()) await closeTurn(STAGE, kept, ok);
     } finally { turning = false; }
     const said = saying.join(' '); saying = null;
     if (ok()) remember(cur || who0, tr, out.steps, said);
@@ -1057,7 +1079,15 @@
       let input = null, r;
       presented = stage;
 
-      if (stage === 'requests') {                    // the guest writes what they need
+      if (session.confirm) {                         // a call the model proposed: nothing runs until the guest says yes
+        const cc = choice(__('تأكيد الإجراء'), confirmWhat(session.confirm), [{ v: 'yes', label: __('نعم، نفّذ'), primary: true }, { v: 'no', label: __('لا، ألغِ') }]);
+        setPanel(...cc.nodes); hint(__('المساعد ينتظر تأكيدك قبل التنفيذ.'), 'warn');
+        r = await race(cc.picked);
+        if (!ok()) return;
+        if (r.refresh) continue;
+        input = r.ask != null ? { type: 'text', text: r.ask } : { type: 'event', name: 'confirm', v: r.v === 'yes' };
+
+      } else if (stage === 'requests') {                    // the guest writes what they need
         setPhase('req'); const rq = reqPanel(); setPanel(...rq.nodes); hint(__('اكتب طلباتك أو اختر منها.'));
         if (auto) { if (!await typeInto(rq.ta, sc.req || '', ok, 32)) return; await sleep(600); r = { v: rq.ta.value }; }
         else r = await race(rq.done);
@@ -2078,7 +2108,7 @@
   /* ---------- the chat window is a second surface of the same agent ----------
      Signing in, registering a new guest and planning an event are the chat's own conversations. Everything else a guest writes
      is one turn of the agent loop: a brain proposes, the permission engine decides, the same tools run, and the trail is kept. */
-  const chatSession = { reqDone: true, waiting: false, offer: false };
+  const chatSession = { reqDone: true, waiting: false, offer: false, confirm: null };
   const chatEnd = () => helpFeed.scrollTo({ top: helpFeed.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
   let chatWait = null;                            // the three dots shown while the agent works
   const chatClear = () => { if (chatWait) { chatWait.remove(); chatWait = null; } };
@@ -2110,6 +2140,7 @@
     /* a button that names the job ("clean my room") starts the turn with that tool; what follows is the rules brain's, as on the guest screen */
     const fixed = firstAct && { name: 'rules', next: t => (t.steps && t.steps.length ? RULES.next(t) : firstAct) };
     let offer0 = chatSession.offer, out = { steps: [] };
+    const kept = [];
     try {
       out = await AG.agent.turn({
         input, lang, brain: fixed || (modelChat() && !plain ? chatBrain : RULES), fallback: RULES,
@@ -2119,11 +2150,14 @@
         approve: (call, d) => askStaff(call, d, ok, c),
         declined: (call, d) => saidNo(call, d, ok, c),
         refuse: (call, d) => refuse(call, d, ok, c),
+        hold: (call, d) => { kept.push({ tool: call.tool, args: d.args }); },
         speak: (code, state, text) => (code === 'flow' ? startFlow(text, raw) : speak(code, state, ok, text, c)),
         record: e => { if (offer0) { offer0 = false; chatSession.offer = false; } if (!tr.who) tr.who = me(); trailAdd(tr, e); },
         onFallback: e => { if (!e || !e.soft) modelDown(); }
       });
     } catch (e) { out = { steps: [] }; }
+    await closeTurn(c, kept, ok);
+    if (kept.length) chips([__('نعم'), __('لا')]);
     chatClear();
     const b = me(), last = chatTurns[chatTurns.length - 1];
     if (b) remember(b, tr, out.steps, last ? last.agent : '');

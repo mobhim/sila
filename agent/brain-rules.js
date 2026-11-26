@@ -48,7 +48,7 @@
     rates: /سعر|[أا]سعار|بكم|التكلفة|price|\brates?\b|how much|cost/i,
     status: /(غرفتي|جناحي|الغرفة|الجناح).{0,20}(جاهز|تجهز|حالة)|جاهزة|is (my|the) (room|suite) ready|room (status|ready)|ready yet/i,
     mine: /حجزي|معلوماتي|بياناتي|\bmy (booking|reservation|details)\b/i,
-    yes: /^(نعم|[إا]يه|[إا]ي|[أا]جل|تمام|موافق|طيب|انقلني|yes|yep|ok|okay|sure|please do|go ahead|move me)(\s|[.!،,]|$)/i,
+    yes: /^(نعم|[إا]يه|[إا]ي|[أا]جل|تمام|موافق|طيب|انقلني|[أا]ك[ّ]?د|نف[ّ]?ذ|yes|yep|ok|okay|sure|please do|go ahead|move me|confirm|do it)(\s|[.!،,]|$)/i,
     no: /^(لا|no|nope|[أا]نتظر|سأنتظر|wait|i(’|'| wi)ll wait)(\s|[.!،,]|$)/i
   };
   function intentOf(raw, state, at) {
@@ -107,6 +107,10 @@
         case 'room_ready': return say('room_ready', 'room_ready', false);
         case 'paid': return advance(state, []);
         case 'key_choice': return call('issue_key', { via: input.via }, 'key_choice');
+        case 'confirm': {                            // the guest answered "shall I ...?": yes proposes the kept call, and the engine decides as for any other
+          const k = (state.confirm || [])[0];
+          return input.v && k ? call(k.tool, k.args, 'confirmed') : say('confirm_no', 'confirm_no');
+        }
         case 'move_choice':
           if (input.v === 'move' && b && b.alt) return call('move_room', { to: b.alt, why: 'maint' }, 'take_alt');
           return eligible(state) ? call('compensate', {}, 'wait_maint') : say('wait_maint', 'wait_maint');
@@ -120,6 +124,7 @@
       case 'price': return call('change_price', {}, i);
       case 'identify': return call('find_booking', { key: it.key, by: it.by }, i);
       case 'choice':
+        if (state.pending === 'confirm') return first({ type: 'event', name: 'confirm', v: it.v }, state);
         if (state.pending === 'room_choice') return first({ type: 'event', name: 'room_choice', v: it.v ? 'alt' : 'wait' }, state);
         return first({ type: 'event', name: 'move_choice', v: it.v ? 'move' : 'stay' }, state);
       case 'give_key':
@@ -151,7 +156,7 @@
     if (f.say) return f.say === 'no_requests' || f.say === 'room_ready' ? advance(state, steps) : DONE;
     const fr = f.result || {}, fa = f.args || {};
     if (f.tool === 'move_room' && !fr.ok) return input.at === 'readiness' && !said('move_failed') ? say('move_failed', 'wait_room') : DONE;
-    if (fr.denied) return DONE;
+    if (fr.denied || fr.held) return DONE;
     switch (f.tool) {
       case 'find_booking':
         if (!fa.key || !fr.ok || !b) return DONE;
@@ -176,7 +181,11 @@
   }
 
   function next(turn) {
-    const steps = turn.steps || [];
+    const steps = turn.steps || [], kept = turn.state.confirm || [];
+    if (steps.length && steps[0].intent === 'confirmed' && kept.length > 1) {      // several kept calls, one yes: each is proposed in its turn
+      const n = steps.filter(s => s.intent === 'confirmed').length;
+      return n < kept.length ? call(kept[n].tool, kept[n].args, 'confirmed') : DONE;
+    }
     return steps.length ? follow(turn.input, turn.state, steps) : first(turn.input, turn.state);
   }
 

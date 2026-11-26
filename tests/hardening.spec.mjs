@@ -2,7 +2,7 @@
    changes anything, one message can hold several requests, and a failing tool does not break the turn.
    No real model is used: the tests answer the API address themselves. */
 import { test, expect } from '@playwright/test';
-import { LANGS, T, watch, open, readStore, bookingOf, arrive, ask, lastTrail, showScreen, playModel, modelReady } from './helpers.mjs';
+import { LANGS, T, watch, open, readStore, bookingOf, arrive, ask, idle, lastTrail, showScreen, playModel, modelReady } from './helpers.mjs';
 import { FALSE_AR, FALSE_EN, FINE_AR, FINE_EN } from './claims.cases.mjs';
 
 const A = '1087654321';
@@ -58,3 +58,64 @@ test.describe('A · claim checker', () => {
     });
   }
 });
+
+for (const lang of LANGS) {
+  test.describe('B · confirm before a model-proposed change · ' + lang, () => {
+    test('a move the guest never asked for does not happen; no drops it, yes sends it through the permission engine', async ({ page }) => {
+      const errors = watch(page);
+      let next = { tool: 'move_room' };
+      const calls = await playModel(page, () => Object.assign({}, OLD, next));
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await arrive(page, A);
+
+      await ask(page, T(lang, 'الغرفة حلوة بس الإطلالة عادية', 'The room is nice but the view is plain'));
+      expect((await bookingOf(page, lang, A)).room).toBe('412');                       // nothing ran
+      await expect(lastTrail(page).locator('li .tag.ask')).toHaveCount(1);
+      await expect(page.locator('#feed .m.bot').last()).toContainText('414');          // the one fixed sentence names the action
+      await expect(page.locator('#feed .m.bot').last()).toContainText(T(lang, '«نعم»', '“yes”'));
+      await ask(page, T(lang, 'لا', 'no'));
+      expect((await bookingOf(page, lang, A)).room).toBe('412');
+      await showScreen(page);
+      await expect(page.locator('#panel [data-v="yes"]')).toHaveCount(0);
+
+      await ask(page, T(lang, 'يعني الإطلالة ما عجبتني صراحة', 'Honestly the view is not what I hoped for'));
+      await showScreen(page);
+      await page.locator('#panel [data-v="yes"]').click();                             // the same answer, from the screen
+      await idle(page);
+      expect((await bookingOf(page, lang, A)).room).toBe('414');
+      await expect(lastTrail(page).locator('li .tag.limit')).toHaveCount(1);           // allowed by a switch the hotel controls
+      await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل القواعد', 'Rules brain'));
+
+      next = { tool: 'open_ticket', kind: 'maint', note: T(lang, 'المكيف لا يبرد', 'AC not cooling') };      // a ticket needs no confirmation
+      await ask(page, T(lang, 'الجو حار داخل الجناح', 'It is hot inside the suite'));
+      await expect(lastTrail(page).locator('li .tag.ask')).toHaveCount(0);
+      expect((await readStore(page, lang)).tickets.length).toBe(1);
+
+      next = { tool: 'late_checkout' };
+      await ask(page, T(lang, 'طيارتي بكرة العصر', 'My flight is tomorrow afternoon'));
+      expect((await bookingOf(page, lang, A)).late).toBe(false);
+      await ask(page, T(lang, 'نعم', 'yes'));
+      expect((await bookingOf(page, lang, A)).late).toBe(true);
+      expect(calls.filter(c => c.task === 'agent').length).toBe(4);                    // a bare yes or no is never sent to a model
+      expect(errors).toEqual([]);
+    });
+
+    test('a confirmed call is still decided by the engine: with the switch off it waits for staff', async ({ page }) => {
+      await playModel(page, () => Object.assign({}, OLD, { tool: 'late_checkout' }));
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await arrive(page, A);
+      await page.evaluate(k => { const s = JSON.parse(localStorage.getItem(k)); s.perms.late = false; localStorage.setItem(k, JSON.stringify(s)); }, lang === 'en' ? 'miftah.sim.v4.en' : 'miftah.sim.v4');
+      await page.reload();
+      await showScreen(page); await modelReady(page);
+      await page.locator('#ctaTry').click();
+      for (const d of A) await page.locator('.keypad [data-k="' + d + '"]').click();
+      await expect(page.locator('#probText')).toBeVisible();
+      await ask(page, T(lang, 'عندي رحلة متأخرة بكرة', 'I have a late flight tomorrow'));
+      await ask(page, T(lang, 'نعم', 'yes'), { pending: true });
+      await expect.poll(async () => (await readStore(page, lang)).approvals.length).toBe(1);
+      expect((await bookingOf(page, lang, A)).late).toBe(false);
+    });
+  });
+}

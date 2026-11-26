@@ -104,7 +104,9 @@ for (const lang of LANGS) {
       await open(page, 'index.html', lang);
       await showScreen(page); await modelReady(page);
       await arrive(page, A);
-      await ask(page, T(lang, 'أنا متضايق من الخدمة', 'I am unhappy with the service'), { pending: true });
+      await ask(page, T(lang, 'أنا متضايق من الخدمة', 'I am unhappy with the service'));      // the model proposed it: the guest is asked first
+      expect((await readStore(page, lang)).approvals.length).toBe(0);
+      await ask(page, T(lang, 'نعم', 'yes'), { pending: true });
       await expect.poll(async () => (await readStore(page, lang)).approvals.length).toBe(1);
       expect((await bookingOf(page, lang, A)).comp).toBe(0);
     });
