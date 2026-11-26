@@ -44,7 +44,7 @@ for (const lang of LANGS) {
       await ask(page, T(lang, 'وش أقرب المعالم للفندق؟', 'What landmarks are near the hotel?'));
       await expect(page.locator('#feed .m.bot').last()).toHaveText(said);
       await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل النموذج', 'Model brain'));
-      await ask(page, T(lang, 'شكراً لك، وكم سعر الجناح الملكي؟', 'Thank you. And how much is the Royal Suite?'));
+      await ask(page, T(lang, 'شكراً لك، وهل الجناح الملكي واسع؟', 'Thank you. And is the Royal Suite spacious?'));
       await ask(page, T(lang, 'تمام يعطيك العافية', 'Great, thanks a lot'));
 
       expect(calls.length).toBe(3);
@@ -90,7 +90,7 @@ for (const lang of LANGS) {
       await expect(lastTrail(page).locator('li .tag.never')).toHaveCount(1);
 
       next = { tool: 'none', reply: T(lang, 'تم. صار إجماليك 100 ريال واسترجعت لك 9999 ريالاً.', 'Done. Your total is now 100 riyals and I refunded you 9999 riyals.') };
-      await ask(page, T(lang, 'وش وضع فاتورتي يا صلة', 'So where does my bill stand'));
+      await ask(page, T(lang, 'عندي سؤال أخير لو تكرمت', 'One last question, if I may'));
       await expect(page.locator('#feed')).not.toContainText('9999');                   // not grounded in the hotel data: the rules answered instead
       await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل القواعد', 'Rules brain'));
 

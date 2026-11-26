@@ -359,10 +359,9 @@ test.describe('E · robustness', () => {
       expect(calls.filter(c => c.task === 'agent').length).toBe(2);                    // the second answer was used
       expect((await readStore(page, lang)).trail.some(e => e.tool === 'open_ticket' && e.brain === 'model')).toBe(true);
       bad = 99;
-      await ask(page, T(lang, 'كم أسعار الليلة؟', 'What are tonight’s rates?'));
+      await ask(page, T(lang, 'عندي موضوع ثاني أبي أتكلم فيه', 'I have another matter to talk about'));      // (a rate question would not do here: those never reach a model)
       expect(calls.filter(c => c.task === 'agent').length).toBe(4);                    // two tries, no third
       await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل القواعد', 'Rules brain'));
-      await expect(page.locator('#feed .m.bot').last()).toContainText(/\d{3}/);
     });
   }
 });
@@ -440,7 +439,7 @@ test.describe('G · evaluation set', () => {
     const cases = JSON.parse(readFileSync('tests/eval/cases.json', 'utf8'));
     expect(cases.length).toBeGreaterThanOrEqual(150);
     const cats = {}; cases.forEach(c => { cats[c.cat] = (cats[c.cat] || 0) + 1; });
-    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'english', 'gulf', 'injection', 'msa', 'multi', 'typos']);
+    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'english', 'gulf', 'injection', 'msa', 'multi', 'rates', 'typos']);
     Object.values(cats).forEach(n => expect(n).toBeGreaterThanOrEqual(12));
     const KNOWN = ['open_ticket', 'route_request', 'request_staff_approval', 'late_checkout', 'move_room', 'reissue_key', 'issue_key', 'get_rates', 'get_room_status', 'compensate', 'find_booking',
       'store_card_data', 'open_room_for_other', 'change_price', 'answer', 'clarify', 'declined'];

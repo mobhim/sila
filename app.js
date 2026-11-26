@@ -2280,13 +2280,15 @@
       drop(); H.flow = { name: 'maint', step: 'what', data: {} };
       return reply(__('وش المشكلة بالضبط؟ مثلاً: المكيف لا يبرّد.'), [__('المكيف لا يعمل'), __('تسريب ماء'), __('الإنارة معطّلة'), __('إلغاء')]);
     }
-    if (!b && it.intent !== 'prices' && !modelChat()) { drop(); reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
+    /* a question about tonight's rates or the guest's own bill, in any wording the rules read, is answered by the code alone */
+    const money = it.intent === 'prices' || (it.intent === 'other' && RULES.local(raw, snapshot(CHATC), 'stay') && ['rates', 'bill'].includes(RULES.intentOf(raw, snapshot(CHATC), 'stay').intent));
+    if (!b && !money && !modelChat()) { drop(); reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
     chatWait = wait;
     const brief = it.q.split(/\s+/).length <= 3;
     const act = !brief ? null : it.intent === 'clean' ? { tool: 'open_ticket', args: { kind: 'clean' }, intent: 'clean' }
       : it.intent === 'maint' ? { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw.trim())) }, intent: 'maint' } : null;
     /* "my booking" and "tonight's rates" are matched by the written rules: instant, and no model quota spent on them */
-    if (!await chatTurn(raw, act, it.intent === 'mine' || it.intent === 'prices')) { reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
+    if (!await chatTurn(raw, act, it.intent === 'mine' || money)) { reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
   }
   let helping = false;
   async function helpAsk(raw) {

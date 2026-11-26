@@ -6,8 +6,9 @@
      ("the AC is broken, I need towels, and a late checkout" is three). The loop asks for them one at a time, and each goes
      through the permission engine on its own: one that is refused or declined does not stop the next.
    - An action is a tool call, a plain answer, or "clarify": one short question when the message contradicts itself.
-   - Card data, another guest's room or booking, a price change, identifying by number, and a bare yes/no to an offer
-     are matched by the written rules in this browser and never sent to a model at all.
+   - Card data, another guest's room or booking, a price change, identifying by number, a bare yes/no to an offer, and a
+     question about tonight's rates or the guest's own bill are matched by the written rules in this browser and never
+     sent to a model at all: every price a guest reads is computed by the page.
    - What follows a tool that ran (an apology, an offered move, the next step of the arrival) is the rules brain's work.
    - It only ever proposes. The permission engine decides, amounts are computed by the page, and a room is the hotel's choice.
    - Free text is read before it is shown: its numbers must come from the hotel's data (grounded), and it may not say
@@ -18,7 +19,6 @@
    carries on with the rules brain in the same turn. */
 (root => {
   const SILA = root.SILA = root.SILA || {};
-  const LOCAL = ['card', 'other_room', 'price', 'identify', 'choice'];
   const INTENT = { route_request: 'requests', issue_key: 'give_key', reissue_key: 'code', move_room: 'move', late_checkout: 'late', compensate: 'comp', request_staff_approval: 'refund',
     get_room_status: 'status', find_booking: 'mine', store_card_data: 'card', open_room_for_other: 'other_room', change_price: 'price' };
   const FLOW = { start_registration: 'register', plan_event: 'event', book_tour: 'tour' };
@@ -129,7 +129,7 @@
         if (!steps.length) plan = null;
         if (input.type !== 'text') return by(rules.next(turn));
         if (!plan) {
-          if (steps.length || LOCAL.includes(rules.intentOf(input.text, state, input.at).intent)) return by(rules.next(turn));
+          if (steps.length || rules.local(input.text, state, input.at)) return by(rules.next(turn));
           plan = await understand(turn); at = 0; base = 0;
         }
         if (at > 0 && steps.length > base && plan[at - 1].tool) {      // what follows a tool that ran is the rules brain's, as long as the rest of the plan still fits in the turn

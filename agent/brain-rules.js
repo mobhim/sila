@@ -37,7 +37,10 @@
     [/\b(a(5|kh)[eia]?ro?(oli| li)?)\b/gi, 'أخروا لي'],
     [/\b(ta2?(5|kh)[ei]+r)\b/gi, 'تأخير'],
     [/\b(el[ -]?|al[ -]?)?m[ou](gh|8)ad[a]?ra\b/gi, 'المغادرة'],
-    [/\b(se3r|as3ar|b[ei]?kam)\b/gi, 'سعر'],
+    [/\b(el[ -]?|al[ -]?)?(se3e?r|s3r|as3ar)\b/gi, 'سعر'], [/\bb[ei]?[ -]?kam\b/gi, 'بكم'], [/\b(kam|km)\b/gi, 'كم'],
+    [/\b(el[ -]?|al[ -]?)?(l[aei]+[iy]?l[ae]h?|lela|lailah?)\b/gi, 'الليلة'], [/\b(el[ -]?|al[ -]?)?(fat[ou]+r(a|ah|ti|ty|at[iy])?)\b/gi, 'فاتورتي'],
+    [/\b(el[ -]?|al[ -]?)?(7[ei]?sab[iy]?|hesab[iy]?)\b/gi, 'حسابي'], [/\b(el[ -]?|al[ -]?)?([ei][jg]mal[iy]|majmoo?3)\b/gi, 'الإجمالي'], [/\b(3alay+[ae]?|3ala[iy])\b/gi, 'علي'],
+    [/\b(t[ae]kl[ei]fa|t[ae]kalif|y[ei]?kal+[ei]f|t[ei]?kal+[ei]f)\b/gi, 'يكلف'], [/\b(adfa3|adf3)\b/gi, 'أدفع'],
     [/\b(ta3w[ei]+[dz]|3aw+[ae]?[dz](ni|oni|ooni))\b/gi, 'تعويض'],
     [/\b(sar[ei]+r)\b/gi, 'سرير'], [/\b(m[ei]khad+a|w[ei]sada)\b/gi, 'وسادة'], [/\b(may+a|mo[iy]+a)\b/gi, 'ماء'],
     [/\b(say+ara)\b/gi, 'سيارة'], [/\b(ma[t6]ar)\b/gi, 'مطار'], [/\b(ma[t6]3am|mata3em)\b/gi, 'مطعم'],
@@ -78,8 +81,10 @@
     comp: /تعويض|عو[ّ]?ضني|عو[ّ]?ضوني|compensat/i,
     move: /انقلني|انقلوني|نقلي|حو[ّ]?لوني|(غي[ّ]?ر|بد[ّ]?ل)(وا)? (لي )?(غرفتي|الغرفة|جناحي|الجناح)|غرفة (ثانية|[أا]خرى|بديلة|غيرها|غير (هذي|هذه|ذي))|جناح (ثاني|[آا]خر|بديل)|move me|change (my|the) room|another room|different room|switch rooms?/i,
     late: /(ت[أا]خير|تمديد|[أا]خ[ّ]?ر(وا)?( لي)?|مد[ّ]?د(وا)?( لي)?) (ال)?(مغادرة|خروج|طلعة|تشيك ?[أا]وت|شيك ?[أا]وت)|مغادرة مت[أا]خرة|[أا]طلع مت[أا]خر|late check-?out|check ?out late|leave later|extend (my )?check-?out/i,
-    bill: /فاتورتي|ال[إا]جمالي|كم (علي|المبلغ)|my bill|\btotal\b|how much do i (owe|pay)/i,
-    rates: /سعر|[أا]سعار|بكم|كم الليلة|التكلفة|price|\brates?\b|how much|cost/i,
+    /* a question about money is answered by the hotel's code, never by a model: the guest's own bill, or tonight's rates.
+       Gulf wording, repeated letters and common misspellings are read here, so that these never need a model. */
+    bill: /ف+ا+ت+و+ر+ت?[يهة]|(ال)?ف+ا+ت+و+ر+[ةه]|ال[إا]جمالي|[إا]جمالي (حساب|فاتور|[إا]قام)|حسابي|(كم|وش|[إا]يش|شنو) (صار |باقي |المطلوب |المبلغ |الحساب |حسابي |علي)|كم (علي|المبلغ|باقي|المطلوب|[أا]دفع|راح [أا]دفع|الحساب)|الحساب كم|(وش|[إا]يش) علي|\bmy (bil+|invoice|balance|charges?|tab)\b|\b(the )?(bil+|invoice)\b(?! of| for)|\btotal\b|how m[ua]t?ch (do|will|did|must|should) i (owe|pay)|what do i owe|how m[ua]t?ch is my (stay|bill|room)|amount due/i,
+    rates: /س+ع+ر+|[أا]س+ع+ا+ر|ب+ك+م|كم (ال)?ل+ي+ل+[ةه]|(ال)?ل+ي+ل+[ةه] (ب?كم|عليكم كم)|كم (ال)?(غرف[ةه]|جناح|سويت)|كم (ت|ي)(كل[ّ]?ف|[اأ]خذون|حسبون)|كم حق|التكلف[ةه]|تسعير|\bpri[cs]es?\b|\bpric(ing)?\b|\brates?\b|how m[ua]t?ch(?! time| longer| later)|\bhw much\b|\bcosts?\b|per night|a night\b|nightly|\btariff/i,
     status: /(غرفتي|جناحي|الغرفة|الجناح).{0,20}(جاهز|تجهز|حالة)|جاهزة|is (my|the) (room|suite) ready|room (status|ready)|ready yet/i,
     mine: /حجزي|معلوماتي|بياناتي|\bmy (booking|reservation|details)\b/i,
     yes: /^(نعم|[إا]يه|[إا]ي|[أا]جل|تمام|موافق|طيب|انقلني|[أا]ك[ّ]?د|نف[ّ]?ذ|yes|yep|ok|okay|sure|please do|go ahead|move me|confirm|do it)(\s|[.!،,]|$)/i,
@@ -154,6 +159,14 @@
       if (i !== main && PARTS.includes(i) && !out.includes(i) && stance(c, i) === 'asked') out.push(i);
     }
     return out;
+  }
+
+  /* what never goes to a model: the three forbidden things, a number that identifies, a bare yes or no to an offer, and a question
+     about tonight's rates or the guest's own bill when it is all the message asks. The code answers those, with its own numbers. */
+  const LOCAL = ['card', 'other_room', 'price', 'identify', 'choice'], MONEY = ['rates', 'bill'];
+  function local(raw, state, at) {
+    const i = intentOf(raw, state, at).intent;
+    return LOCAL.includes(i) || (MONEY.includes(i) && !others(raw, state, at, i).length);
   }
 
   const eligible = state => { const b = state.booking; return !!(b && b.paid && !b.comp && !b.refunded && state.perms.limit > 0); };
@@ -274,5 +287,5 @@
   }
 
   SILA.brains = SILA.brains || {};
-  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, splitRequests, kindOf, latin, norm });
+  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, local, splitRequests, kindOf, latin, norm });
 })(typeof window !== 'undefined' ? window : globalThis);
