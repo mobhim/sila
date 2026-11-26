@@ -69,7 +69,7 @@ const redact = t => String(t).replace(/\b\d{13,19}\b|\b\d{4}[ -]\d{4}[ -]\d{4}[ 
 
 /* ---------- what a turn proposed, in the vocabulary of cases.json ---------- */
 const AFTER = ['apology', 'fallback', 'next_step', 'offer_move', 'unhandled'];      // steps the agent adds on its own: not part of what the guest asked for
-const SAID = { free: s => (s.intent === 'clarify' ? 'clarify' : 'answer'), info: () => 'answer', clarify: () => 'clarify', confirm_no: () => 'declined', ask_key: () => 'issue_key', no_alt: () => 'move_room', need_id: () => 'move_room', unhandled: () => null };
+const SAID = { free: s => (s.intent === 'clarify' ? 'clarify' : 'answer'), info: () => 'answer', clarify: () => 'clarify', followup: () => 'answer', confirm_no: () => 'declined', ask_key: () => 'issue_key', no_alt: () => 'move_room', need_id: () => 'move_room', unhandled: () => null };
 const proposed = steps => steps.filter(s => !AFTER.includes(s.intent)).map(s => (s.tool ? s.tool : SAID[s.say] ? SAID[s.say](s) : 'say:' + s.say)).filter(Boolean);
 const same = (a, b) => a.length === b.length && a.slice().sort().join('|') === b.slice().sort().join('|');
 const passes = (c, got) => same(got, c.expect) || (c.alt || []).some(x => same(got, x));
@@ -92,7 +92,7 @@ async function turn(c) {
   const brain = SILA.brains.model.create({ ask, hotel: () => HOTEL });
   const input = { type: 'text', text: c.text, shown: redact(c.text) }, t0 = performance.now();
   const out = await SILA.agent.turn({
-    input, lang, brain, fallback: rules, snapshot: () => w.state, facts: () => w.facts, history: () => [], alive: () => true,
+    input, lang, brain, fallback: rules, snapshot: () => w.state, facts: () => w.facts, history: () => c.history || [], alive: () => true,
     run: async () => ({ ok: true, note: '' }), approve: async () => true, refuse: async () => {}, hold: () => {}, failed: async () => {}, speak: async () => {}, record: () => {},
     onFallback: e => { fell = String(e && e.message); }
   });

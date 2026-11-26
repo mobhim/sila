@@ -121,3 +121,82 @@ test.describe('B · fact checker for free model text', () => {
     });
   }
 });
+
+test.describe('D · vague requests', () => {
+  test('the rules ask what is meant when nothing says it, take up an earlier turn that was left undone, and open nothing twice', async ({ page }) => {
+    await open(page, 'index.html', 'en');
+    const out = await page.evaluate(() => {
+      const R = window.SILA.brains.rules, perms = { reissue: true, ticket: true, move: true, late: true, limit: 150 };
+      const state = pending => ({ stage: 'stay', pending: pending || null, booking: { room: '412', key: 'code', paid: true, arrived: true, alt: '414' }, perms });
+      const next = (text, history, pending) => { const a = R.next({ input: { type: 'text', text, at: 'stay' }, state: state(pending), steps: [], history: history || [] }); return a.tool ? a.tool + ':' + (a.args.text || a.args.kind || '') : a.say + ':' + (a.text || ''); };
+      const VAGUE = ['fix it', 'Fix it!', 'صلحوها', 'do it', 'help', 'help me please', 'ساعدوني', 'عندي مشكلة', 'do something', 'sort it out', 'it\'s not working', 'خربان', 'I need help', 'سووها الحين', 'أبي مساعدة', 'please fix this'];
+      const CLEAR = ['fix the AC', 'صلحوا المكيف', 'the TV is not working', 'المكيف خربان', 'I need help with my towels', 'change my room', 'do a late checkout for me'];
+      const undone = [{ heard: 'The AC is not cooling', said: 'Something went wrong on our side.', did: ['open_ticket:no'] }], done = [{ heard: 'The AC is not cooling', said: 'I opened a ticket.', did: ['open_ticket:ok'] }];
+      return {
+        asked: VAGUE.filter(t => next(t) !== 'clarify:vague'), wrongly: CLEAR.filter(t => next(t) === 'clarify:vague'),
+        undone: next('fix it', undone), done: next('صلحوها', done),
+        old: next('fix it', [Object.assign({ at: Date.now() - 11 * 60000 }, undone[0])]),          // an earlier turn is something to point to for ten minutes
+        pressed: next('fix it', [Object.assign({ typed: false }, undone[0])]),                       // a button the guest pressed is not something "it" can mean
+        chatter: next('fix it', [{ heard: 'thanks a lot', said: 'You are welcome.', did: [] }]),
+        yes: next('do it', [], 'move_offer')                                                         // an offer on the table: "do it" is a yes
+      };
+    });
+    expect(out.asked).toEqual([]);
+    expect(out.wrongly).toEqual([]);
+    expect(out.undone).toBe('open_ticket:The AC is not cooling');
+    expect(out.done).toBe('followup:maint');
+    expect([out.old, out.pressed, out.chatter]).toEqual(['clarify:vague', 'clarify:vague', 'clarify:vague']);
+    expect(out.yes).toBe('move_room:');
+  });
+
+  for (const lang of LANGS) {
+    test('“fix it” opens no ticket: the guest is asked, by the rules and with a model on · ' + lang, async ({ page }) => {
+      const errors = watch(page);
+      let answer = planOf(ACT('open_ticket', { kind: 'maint', note: 'Fix it' }));                  // what a model did with these words in the evaluation
+      const calls = await playModel(page, () => answer);
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await arrive(page, A);
+      const what = T(lang, 'ما المطلوب بالضبط؟', 'What exactly do you need?');
+      for (const q of T(lang, ['صلحوها', 'عندي مشكلة'], ['Fix it', 'do something'])) {
+        await ask(page, q);
+        await expect(page.locator('#feed .m.bot').last()).toContainText(what);
+        await expect(lastTrail(page).locator('.trail-got')).toContainText(T(lang, 'رسالة تحتاج توضيحاً', 'A message that needs clarifying'));
+      }
+      expect(calls.filter(c => c.task === 'agent').length).toBe(0);                    // nothing for a model to read
+      expect((await readStore(page, lang)).tickets.length).toBe(0);
+      /* now a turn that says what "it" is: the model reads the next vague message together with it */
+      answer = planOf(ACT('open_ticket', { kind: 'maint', note: T(lang, 'التلفزيون لا يعمل', 'TV not working') }));
+      await ask(page, T(lang, 'التلفزيون ما يشتغل أبداً', 'The TV does not turn on at all'));
+      await expect.poll(async () => (await readStore(page, lang)).tickets.length).toBe(1);
+      answer = replyOf(T(lang, 'بلاغ التلفزيون عند فريق الصيانة الآن.', 'The TV ticket is with the maintenance team now.'));
+      const before = calls.filter(c => c.task === 'agent').length;
+      await ask(page, T(lang, 'صلحوها', 'fix it'));
+      const sent = calls.filter(c => c.task === 'agent');
+      expect(sent.length).toBe(before + 1);
+      expect(JSON.stringify(sent[sent.length - 1].input.history)).toContain(T(lang, 'التلفزيون', 'TV'));
+      expect((await readStore(page, lang)).tickets.length).toBe(1);
+      if (lang === 'en') await noArabic(page);
+      expect(errors).toEqual([]);
+    });
+
+    test('with no model, an earlier turn says what “it” is: nothing is opened twice, in the chat window too · ' + lang, async ({ page }) => {
+      await open(page, 'index.html', lang);
+      await arrive(page, A);
+      await ask(page, T(lang, 'المكيف لا يبرّد', 'The AC is not cooling'));
+      await expect.poll(async () => (await readStore(page, lang)).tickets.length).toBe(1);
+      await ask(page, T(lang, 'لا', 'no'));                                              // the offered move is declined
+      await ask(page, T(lang, 'المكيف لا يبرّد أبداً', 'The AC is still not cooling'));
+      await expect.poll(async () => (await readStore(page, lang)).tickets.length).toBe(2);
+      await ask(page, T(lang, 'صلحوها', 'fix it'));
+      await expect(page.locator('#feed .m.bot').last()).toContainText(T(lang, 'طلبك السابق (بلاغ العطل) مسجّل', 'Your earlier request (the fault report) is registered'));
+      expect((await readStore(page, lang)).tickets.length).toBe(2);
+      await page.locator('#helpFab').click();
+      await chatSend(page, A);
+      await expect(chatLast(page)).toContainText('412');
+      await chatSend(page, T(lang, 'عندي مشكلة', 'do something'));
+      await expect(chatLast(page)).toContainText(T(lang, 'ما المطلوب بالضبط؟', 'What exactly do you need?'));
+      expect((await readStore(page, lang)).tickets.length).toBe(2);
+    });
+  }
+});

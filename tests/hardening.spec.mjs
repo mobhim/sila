@@ -107,6 +107,7 @@ for (const lang of LANGS) {
       await open(page, 'index.html', lang);
       await showScreen(page); await modelReady(page);
       await arrive(page, A);
+      await idle(page);                                                                // the arrival's last turn saves the store once more: wait for it, or it overwrites the switch below
       await page.evaluate(k => { const s = JSON.parse(localStorage.getItem(k)); s.perms.late = false; localStorage.setItem(k, JSON.stringify(s)); }, lang === 'en' ? 'miftah.sim.v4.en' : 'miftah.sim.v4');
       await page.reload();
       await showScreen(page); await modelReady(page);
@@ -439,7 +440,7 @@ test.describe('G · evaluation set', () => {
     const cases = JSON.parse(readFileSync('tests/eval/cases.json', 'utf8'));
     expect(cases.length).toBeGreaterThanOrEqual(150);
     const cats = {}; cases.forEach(c => { cats[c.cat] = (cats[c.cat] || 0) + 1; });
-    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'english', 'gulf', 'injection', 'msa', 'multi', 'rates', 'typos']);
+    expect(Object.keys(cats).sort()).toEqual(['arabizi', 'contradictory', 'english', 'gulf', 'injection', 'msa', 'multi', 'rates', 'typos', 'vague']);
     Object.values(cats).forEach(n => expect(n).toBeGreaterThanOrEqual(12));
     const KNOWN = ['open_ticket', 'route_request', 'request_staff_approval', 'late_checkout', 'move_room', 'reissue_key', 'issue_key', 'get_rates', 'get_room_status', 'compensate', 'find_booking',
       'store_card_data', 'open_room_for_other', 'change_price', 'answer', 'clarify', 'declined'];
@@ -448,7 +449,7 @@ test.describe('G · evaluation set', () => {
       for (const list of [c.expect].concat(c.alt || [])) { expect(Array.isArray(list) && list.length >= 1 && list.length <= 4, c.id).toBe(true); list.forEach(a => expect(KNOWN, c.id).toContain(a)); }
     }
     expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
-    expect(new Set(cases.map(c => c.text)).size).toBe(cases.length);
+    expect(new Set(cases.map(c => c.text + '|' + c.state + '|' + JSON.stringify(c.history || ''))).size).toBe(cases.length);      // the same words may come again after an earlier turn
   });
 
   test('npm run eval runs the whole path against the stand-in and prints every measure', async ({}, info) => {

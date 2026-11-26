@@ -10,7 +10,14 @@ const { rules } = loadAgent().brains;
 const between = (s, tag) => { const m = String(s).match(new RegExp('<' + tag + '>\\n?([\\s\\S]*?)\\n?</' + tag + '>')); return m ? m[1] : ''; };
 const blank = (tool, extra) => Object.assign({ tool, items: [], via: null, kind: null, scope: null, requested: null, note: '', question: '' }, extra);
 
-function plan(text, st) {
+function plan(text, st, history) {
+  /* "fix it" after an earlier turn: the stand-in reads the last guest line the way the rules do. A matter the agent could not carry
+     out is taken up again; one it did carry out is only answered. */
+  const lines = String(history || '').split('\n'), heard = (lines.filter(l => l.startsWith('guest: ')).pop() || '').slice(7), said = (lines.filter(l => l.startsWith('agent: ')).pop() || '').slice(7);
+  if (rules.vague(text) && heard) {
+    if (!said || /could not|went wrong|تعذ[ّ]?ر|خلل/.test(said)) text = heard;
+    else return { actions: [], reply: /[؀-ۿ]/.test(text) ? 'طلبك السابق مسجّل ويُتابَع.' : 'Your earlier request is registered and being followed up.' };
+  }
   const ar = /[؀-ۿ]/.test(text), b = st.booking;
   const state = { stage: st.stage, pending: st.pending, booking: b ? { room: b.room, key: b.key, paid: b.paid, arrived: b.arrived, alt: b.alternativeRoomAvailable ? '0' : null } : null, perms: {} };
   const main = rules.intentOf(text, state, st.stage), stance = rules.stance(text, main.intent);
@@ -46,7 +53,7 @@ export function startStandIn() {
       try {
         const m = JSON.parse(raw || '{}').messages || [], sys = String((m[0] || {}).content), user = String((m[1] || {}).content);
         if (sys.includes('closing reply')) out = { reply: between(user, 'said').split('\n').filter(Boolean).join(' ') };
-        else if (sys.includes('"actions"')) out = plan(between(user, 'guest_text'), JSON.parse(between(user, 'booking_state') || '{}'));
+        else if (sys.includes('"actions"')) out = plan(between(user, 'guest_text'), JSON.parse(between(user, 'booking_state') || '{}'), between(user, 'history'));
       } catch (e) { out = {}; }
       res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(out) } }] }));
     });

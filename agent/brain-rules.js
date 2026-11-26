@@ -161,6 +161,34 @@
     return out;
   }
 
+  /* ---------- a message that names nothing ----------
+     "fix it", "صلحوها", "do it", "help", "it is broken": no object, and often no problem either. Acting on it would open a ticket that
+     says "fix it". With no earlier turn it could point to, the guest is asked what they mean.
+     With an earlier turn that says what "it" is: if that turn left the matter undone, it is taken up now; if it was already done,
+     the guest is told it is registered, and nothing is opened twice. */
+  const VAGUE = new RegExp('^(?:' + [
+    '(?:please |pls |plz |can you |could you |just )*(?:fix|repair|sort|solve|handle|do|check|change|resolve)(?: (?:it|this|that|them|it out|this out|something|something about it))?',
+    '(?:please |pls |i need |i want |can you |could you |need )*help(?: me| us)?(?: out)?',
+    '(?:i have |there is |there\'s |got )?(?:a |an )?(?:problem|issue)', 'do something', 'sort it out', 'make it work',
+    '(?:it(?: is|\'s)? )?(?:not working|broken)', 'something is wrong',
+    '(?:[أا]?صلح|عدل|سو|حل|ضبط|زبط|نف[ّ]?ذ|غي[ّ]?ر)(?:وا|وها|وه|ها|ه|ي|يها)?(?: (?:لي|لنا))?(?: (?:الموضوع|المشكل[ةه]|هذا|هذي|ذا|ذي|شي))?',
+    '(?:[أا]بي|[أا]بغى|[أا]حتاج|[أا]ريد|محتاج) (?:مساعد[ةه]|حل|[أا]حد يساعدني)', 'مساعد[ةه]', 'ساعد(?:ني|وني|ونا)', 'شوف(?:وا)?(?: لي| لنا)? (?:حل|الموضوع|المشكل[ةه])', 'تصرف(?:وا)?',
+    '(?:عندي|في|فيه|عندنا) مشكل[ةه]', 'مشكل[ةه]', '(?:ما|مو|مش) (?:شغال[ةه]?|يشتغل|تشتغل)', 'خربان[ةه]?'
+  ].join('|') + ')(?: (?:please|pls|now|asap|quickly|لو سمحت|لو سمحتوا|الحين|بسرعة|الله يعافيك))*[\\s.!؟?]*$', 'i');
+  const vague = raw => VAGUE.test(norm(raw).trim());
+  const ACTED = ['refund', 'comp', 'move', 'late', 'code', 'give_key', 'clean', 'maint', 'requests'];
+  /* what a vague message points back to: the last turn, when what the guest wrote then asks for something. null: nothing to point to. */
+  const RECENT = 10 * 60000;                       // an earlier turn is something "it" can point to for ten minutes
+  const lastOf = history => { const l = (history || [])[(history || []).length - 1]; return l && l.typed !== false && l.heard && !vague(l.heard) && (!l.at || Date.now() - l.at <= RECENT) ? l : null; };      // something the guest wrote that says something: not a button they pressed, not another "fix it"
+  function refOf(history, state, at) {
+    const last = lastOf(history);
+    if (!last) return null;
+    const intent = intentOf(last.heard, state, at).intent;
+    if (!ACTED.includes(intent)) return null;
+    const done = Array.isArray(last.did) ? last.did.some(d => /:ok$/.test(d)) : !!last.said;
+    return { intent, text: String(last.heard), done };
+  }
+
   /* what never goes to a model: the three forbidden things, a number that identifies, a bare yes or no to an offer, and, when it is
      all the message asks, a question about tonight's rates, the guest's own bill, or the check-out, tax or refund policy.
      The code answers those, with its own numbers and the hotel's own sentences. */
@@ -281,8 +309,15 @@
       const n = steps.filter(s => s.intent === 'confirmed').length;
       return n < kept.length ? call(kept[n].tool, kept[n].args, 'confirmed') : DONE;
     }
-    const a = steps.length ? follow(input, turn.state, steps) : first(input, turn.state);
-    if (input.type !== 'text') return a;
+    if (!steps.length && input.type === 'text' && vague(input.text) && intentOf(input.text, turn.state, input.at).intent !== 'choice') {      // ("do it" to an offer on the table is a yes)
+      const ref = refOf(turn.history, turn.state, input.at);
+      if (!ref) return Object.assign(say('clarify', 'clarify'), { text: 'vague' });
+      if (ref.done) return Object.assign(say('followup', 'answer'), { text: ref.intent });
+      input.refers = ref.text;                       // the turn carries on as if the guest had repeated what they wrote before
+    }
+    const told = input.refers ? Object.assign({}, input, { text: input.refers }) : input;
+    const a = steps.length ? follow(told, turn.state, steps) : first(told, turn.state);
+    if (input.type !== 'text' || input.refers) return a;
     if (!steps.length) { const main = intentOf(input.text, turn.state, input.at).intent; input.rest = a.say === 'clarify' ? [] : others(input.text, turn.state, input.at, main); }
     if (!input.rest || !input.rest.length || steps.some(s => s.say === 'unhandled')) return a;
     if (a.done) return Object.assign(say('unhandled', 'unhandled'), { text: input.rest.join(',') });      // say which parts were left, rather than drop them
@@ -290,5 +325,5 @@
   }
 
   SILA.brains = SILA.brains || {};
-  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, local, splitRequests, kindOf, latin, norm });
+  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, local, vague, refOf, lastOf, splitRequests, kindOf, latin, norm });
 })(typeof window !== 'undefined' ? window : globalThis);

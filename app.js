@@ -757,7 +757,7 @@
 
   /* ---------- the trail: on the guest screen as it happens, and in the store for the admin console ---------- */
   let turnN = 0;
-  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), heard: heardOf(input), node: null, rows: {}, intent: null, intents: [], src: 'stage', ui: STAGE }; }
+  function trailStart(input) { return { id: Date.now().toString(36) + '-' + (++turnN), typed: input.type === 'text', heard: heardOf(input), node: null, rows: {}, intent: null, intents: [], src: 'stage', ui: STAGE }; }
   const AFTER = ['apology', 'fallback', 'next_step', 'offer_move', 'unhandled'];      // steps the agent adds on its own; the rest is what the guest asked for
   function trailNode(tr) {
     if (tr.node || !tr.ui) return;
@@ -809,10 +809,11 @@
     });
   }
   /* a memory for each booking: what that guest said and what was done, kept under their booking only */
+  const didOf = steps => steps.filter(s => s.tool).map(s => s.tool + ':' + (s.result && s.result.ok ? 'ok' : s.result && s.result.denied ? 'denied' : s.result && s.result.declined ? 'declined' : 'no'));
   function remember(b, tr, steps, said) {
     if (!b) return;
     const m = S.memory[b.id] || (S.memory[b.id] = []);
-    m.push({ t: nowTime(), heard: redact(tr.heard).slice(0, 200), said: redact(said || '').slice(0, 300), intent: tr.intent || '', did: steps.filter(s => s.tool).map(s => s.tool + ':' + (s.result && s.result.ok ? 'ok' : s.result && s.result.denied ? 'denied' : s.result && s.result.declined ? 'declined' : 'no')) });
+    m.push({ t: nowTime(), at: Date.now(), typed: !!tr.typed, heard: redact(tr.heard).slice(0, 200), said: redact(said || '').slice(0, 300), intent: tr.intent || '', did: didOf(steps) });
     if (m.length > 20) m.splice(0, m.length - 20);
     save();
   }
@@ -1054,7 +1055,10 @@
           : __('ليس في بيانات الفندق قائمة بالمطاعم القريبة، ولا أخمّن. خدمة الغرف متاحة لك، وإن أردت توصية فاكتب طلبك وأحوّله للكونسيرج.');
         return c.bot(t, ok);
       }
-      case 'clarify': return c.bot(fill(__('في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟'), { what: PART[text] || '' }), ok);
+      case 'clarify':
+        if (text === 'vague') return c.bot(__('ما المطلوب بالضبط؟ اكتب ما الذي تريد إصلاحه أو تنفيذه، مثل: المكيف لا يبرّد، أو أحتاج مناشف.'), ok);      // "fix it", with nothing it could point to
+        return c.bot(fill(__('في رسالتك طلب وعكسه: {what}. لم أنفّذ شيئاً. أيهما تريد؟'), { what: PART[text] || '' }), ok);
+      case 'followup': return c.bot(fill(__('طلبك السابق ({what}) مسجّل عندنا ويُتابَع، ولم أفتح طلباً جديداً. إن كان عندك شيء آخر فاكتب ما هو.'), { what: PART[text] || __('طلبك') }), ok);
       case 'unhandled': return c.bot(fill(__('نفّذت طلباً واحداً من رسالتك. بقي ما لم أتناوله: {what}. اكتب كل طلب في رسالة وأنفّذه.'), { what: String(text || '').split(',').map(p => PART[p]).filter(Boolean).join(__('، ')) }), ok);
       case 'confirm_no': return c.bot(__('تمام، لم أنفّذ شيئاً.'), ok);
       case 'free': return text ? c.bot(redact(text), ok) : true;      // a model's own words: only ever an answer, never an action
@@ -2241,7 +2245,7 @@
       out = await AG.agent.turn({
         input, lang, brain, fallback: RULES,
         snapshot: () => snapshot(c), facts: () => factsFor(c.b), alive: ok,
-        history: () => chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })),
+        history: () => chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent), did: t.did })),
         run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok, c),
         approve: (call, d) => askStaff(call, d, ok, c),
         declined: (call, d) => saidNo(call, d, ok, c),
@@ -2259,6 +2263,7 @@
     if (kept.length) chips([__('نعم'), __('لا')]);
     chatClear();
     const b = me(), last = chatTurns[chatTurns.length - 1];
+    if (last) last.did = didOf(out.steps);          // what this turn carried out, so that a later "fix it" knows whether the matter is still open
     if (b) remember(b, tr, out.steps, last ? last.agent : '');
     if (cur && b && cur === b) stageRefresh();      // the guest screen shows the same booking: let it catch up
     return helpFeed.querySelectorAll('.m.bot:not(.typing)').length > before;

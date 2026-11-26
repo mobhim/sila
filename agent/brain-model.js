@@ -139,6 +139,8 @@
         if (input.type !== 'text') return by(rules.next(turn));
         if (!plan) {
           if (steps.length || rules.local(input.text, state, input.at)) return by(rules.next(turn));
+          /* "fix it", with no earlier turn it could point to: there is nothing for a model to read, so the guest is asked. With an earlier turn, the model reads it. */
+          if (rules.vague(input.text) && !rules.lastOf(turn.history)) return by(rules.next(turn));
           plan = await understand(turn); at = 0; base = 0;
         }
         if (at > 0 && steps.length > base && plan[at - 1].tool) {      // what follows a tool that ran is the rules brain's, as long as the rest of the plan still fits in the turn
