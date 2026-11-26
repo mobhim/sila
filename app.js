@@ -2102,7 +2102,7 @@
     chatClear();
     return route(name === 'start_registration' ? 'register' : name === 'book_tour' ? 'tour' : 'event', raw, latin(raw).trim());
   }
-  async function chatTurn(raw, firstAct) {
+  async function chatTurn(raw, firstAct, plain) {
     const c = CHATC, input = { type: 'text', text: String(raw).slice(0, 300) }, ok = () => true;
     input.shown = redact(input.text);
     const tr = Object.assign(trailStart(input), { src: 'chat', ui: CHATC, who: me() });
@@ -2112,7 +2112,7 @@
     let offer0 = chatSession.offer, out = { steps: [] };
     try {
       out = await AG.agent.turn({
-        input, lang, brain: fixed || (modelChat() ? chatBrain : RULES), fallback: RULES,
+        input, lang, brain: fixed || (modelChat() && !plain ? chatBrain : RULES), fallback: RULES,
         snapshot: () => snapshot(c), facts: () => factsFor(c.b), alive: ok,
         history: () => chatTurns.slice(0, -1).slice(-8).map(t => ({ heard: redact(t.guest), said: redact(t.agent) })),
         run: (tool, args, d, x) => TOOLS[tool](args, d, x, ok, c),
@@ -2151,7 +2151,8 @@
     chatWait = wait;
     const act = it.intent === 'clean' ? { tool: 'open_ticket', args: { kind: 'clean' }, intent: 'clean' }
       : it.intent === 'maint' ? { tool: 'open_ticket', args: { kind: 'maint', text: short(redact(raw.trim())) }, intent: 'maint' } : null;
-    if (!await chatTurn(raw, act)) { reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
+    /* "my booking" and "tonight's rates" are matched by the written rules: instant, and no model quota spent on them */
+    if (!await chatTurn(raw, act, it.intent === 'mine' || it.intent === 'prices')) { reply(__('ما فهمت طلبك تماماً. ') + CAN); return false; }
   }
   let helping = false;
   async function helpAsk(raw) {
