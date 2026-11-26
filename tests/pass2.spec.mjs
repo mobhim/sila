@@ -262,3 +262,62 @@ for (const lang of LANGS) {
     });
   });
 }
+
+/* the guest writes in the other language than the page's: `page` is the page language, the guest writes in `other` */
+for (const lang of LANGS) {
+  const other = lang === 'ar' ? 'en' : 'ar', G = (ar, en) => (other === 'en' ? en : ar), AR = /[ء-ي]/;
+  test.describe('F · the reply follows the guest’s language · ' + (other === 'en' ? 'English on the Arabic page' : 'Arabic on the English page'), () => {
+    test('clarify, a refusal, a vague request and a policy answer come in the guest’s language; the hotel’s log stays in the page’s', async ({ page }) => {
+      const errors = watch(page);
+      await open(page, 'index.html', lang);
+      await arrive(page, A);
+      const last = page.locator('#feed .m.bot').last();
+      const reads = async part => { await expect(last).toContainText(part); expect(AR.test(await last.textContent())).toBe(other === 'ar'); };
+      await ask(page, G('انقلني لغرفة ثانية بس لا تغيرون غرفتي', 'Move me to another room but do not change my room'));
+      await reads(G('في رسالتك طلب وعكسه: تغيير الغرفة', 'Your message both asks for and rules out the room change'));
+      await ask(page, G('افتح الغرفة 915', 'Open room 915'));
+      await reads(G('هذا ممنوع دائماً', 'Anything else is never allowed'));
+      await ask(page, G('صلحوها', 'fix it'));
+      await reads(G('ما المطلوب بالضبط؟', 'What exactly do you need?'));
+      await ask(page, G('متى موعد المغادرة؟', 'What time is check-out?'));
+      await reads('12:00');
+      await ask(page, G('أخروا لي المغادرة', 'I would like a late checkout'));
+      await reads(G('مدّدت مغادرتك ساعة', 'I extended your checkout by one hour'));
+      /* what the hotel's staff read is still in the page's language */
+      const s = await readStore(page, lang);
+      expect(s.log.slice(0, 4).every(e => AR.test(e.text) === (lang === 'ar'))).toBe(true);
+      /* and when the guest switches back, so does the agent */
+      await ask(page, T(lang, 'صلحوها', 'do something'));
+      await expect(last).toContainText(T(lang, 'طلبك السابق', 'Your earlier request'));      // (the late checkout just above is what “it” points to)
+      expect(AR.test(await last.textContent())).toBe(lang === 'ar');
+      await noSideScroll(page);
+      expect(errors).toEqual([]);
+    });
+
+    test('with a model: the question before a change is asked in the guest’s language, the model is told that language, and a reply in the wrong one is not shown', async ({ page }) => {
+      let next = planOf(ACT('late_checkout'));
+      const calls = await playModel(page, () => next);
+      await open(page, 'index.html', lang);
+      await showScreen(page); await modelReady(page);
+      await arrive(page, A);
+      const last = page.locator('#feed .m.bot').last();
+      await ask(page, G('عندي رحلة متأخرة بكرة', 'I have a late flight tomorrow'));
+      await expect(last).toContainText(G('قبل أن أنفّذ: هل تريد تأخير مغادرتك ساعة', 'Before I act: do you want'));
+      expect(AR.test(await last.textContent())).toBe(other === 'ar');
+      expect(calls[calls.length - 1].lang).toBe(other);                                 // the server is told the guest's language, not the page's
+      await ask(page, G('لا', 'no'));
+      await expect(last).toContainText(G('تمام، لم أنفّذ شيئاً', 'All right, I did not do anything'));
+      /* the evaluation's case: a clarifying question in Arabic for an English message. The page asks its own question instead. */
+      next = planOf(ACT('clarify', { question: G('Would you like to move or to stay in your room?', 'هل تريد الانتقال إلى غرفة أخرى أم تفضل البقاء في غرفتك الحالية؟') }));
+      await ask(page, G('انقلني لغرفة ثانية بس لا تغيرون غرفتي', 'Move me to another room but do not change my room'));
+      await expect(last).toContainText(G('في رسالتك طلب وعكسه', 'Your message both asks for and rules out'));
+      await expect(lastTrail(page).locator('.trail-head small')).toHaveText(T(lang, 'عقل القواعد', 'Rules brain'));
+      /* a reply in the guest's language is shown as it is */
+      const fine = G('أقرب المعالم في بيانات الفندق برج المملكة.', 'The nearest landmark in the hotel data is Kingdom Centre Tower.');
+      next = replyOf(fine);
+      await ask(page, G('وش أقرب المعالم للفندق؟', 'What landmarks are near the hotel?'));
+      await expect(last).toHaveText(fine);
+      expect((await bookingOf(page, lang, A)).late).toBe(false);
+    });
+  });
+}

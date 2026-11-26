@@ -50,6 +50,15 @@
     let t = latin(s).replace(/(?<=[\u0621-\u064A]{3})ه(?![\u0621-\u064A])/g, 'ة');      // «الغرفه» is «الغرفة»
     if (/[a-z]/i.test(t)) for (const [re, word] of ARABIZI) t = t.replace(re, ' ' + word + ' '); return t.replace(/\s+/g, ' '); };
 
+  /* the language a guest wrote in: Arabic letters, or Arabic typed in Latin letters, is Arabic; other Latin text is English;
+     a bare number or a button says nothing, and the language before it stays */
+  const langOf = (text, before) => {
+    const t = String(text == null ? '' : text);
+    if (/[ء-ي]/.test(t)) return 'ar';
+    if (!/[a-z]{2}/i.test(t)) return before || 'ar';
+    return /\b[a-z]*[2357][a-z]+\b|\b[a-z]+[2357][a-z]*\b/i.test(t) || /[ء-ي]/.test(norm(t)) ? 'ar' : 'en';
+  };
+
   /* ---------- the written rules the prototype already had: requests to departments, and the kind of a problem ---------- */
   const REQ_RULES = [
     [/سرير|وساد|مناشف|منشف|تنظيف|بطاني|شرشف|مهد|\b(bed|pillows?|towels?|clean\w*|blankets?|sheets?|crib|cot)\b/i, 'housekeeping'],
@@ -325,5 +334,5 @@
   }
 
   SILA.brains = SILA.brains || {};
-  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, local, vague, refOf, lastOf, splitRequests, kindOf, latin, norm });
+  SILA.brains.rules = Object.freeze({ name: 'rules', next, follow, intentOf, others, stance, local, vague, refOf, lastOf, langOf, splitRequests, kindOf, latin, norm });
 })(typeof window !== 'undefined' ? window : globalThis);

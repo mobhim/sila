@@ -77,9 +77,9 @@ const passes = (c, got) => same(got, c.expect) || (c.alt || []).some(x => same(g
 let ipN = 0;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function turn(c) {
-  const w = world(c.state), lang = /[؀-ۿ]/.test(c.text) ? 'ar' : 'en';
+  const w = world(c.state), lang = rules.langOf(c.text, 'ar');      // Arabic typed in Latin letters is answered in Arabic, as on the page
   let calls = 0, fell = null, wording = null; const via = [];
-  const ask = async (task, input) => {
+  const ask = async (task, input, l) => {
     calls++;
     const r = API
       ? await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task, lang, input }) })

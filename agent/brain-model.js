@@ -34,17 +34,20 @@
   }
 
   /* o: { ask(task, input) -> Promise<output>, hotel() -> facts for the model, channel?: 'chat', flows?: tools that only the chat window has,
-          rejected?(why, text): told each time a model's words are thrown away ('number' | 'claim' | 'fact') } */
+          rejected?(why, text): told each time a model's words are thrown away ('language' | 'number' | 'claim' | 'fact') } */
   function create(o) {
     const rules = SILA.brains.rules, by = a => Object.assign({ by: 'rules' }, a);
     const drop = (why, text, reason) => { if (o.rejected) o.rejected(why, text); fail(reason, true); };
+    /* a reply in Arabic to a guest who wrote in English, or the reverse, is not shown: the page's own sentence in their language is */
+    const tongue = (text, lang) => (lang === 'en' ? (String(text).match(/[\u0621-\u064A]/g) || []).length < 3 : lang === 'ar' ? /[\u0621-\u064A]/.test(text) : true);
     const knownOf = state => ({ paid: state && state.booking ? !!state.booking.paid : undefined });
     let plan = null, at = 0, base = 0;              // this turn's plan, the next action in it, and the step its last action began at
 
     /* free text a model wrote for the guest: an answer or a question, never a report of something done */
-    function words(text, max, facts, steps, known) {
+    function words(text, max, facts, steps, known, lang) {
       const t = String(text || '').trim().slice(0, max);
       if (!t) fail('empty reply');
+      if (!tongue(t, lang)) drop('language', t, 'a reply in another language than the guest wrote in');
       if (!grounded(t, facts)) drop('number', t, 'a number the hotel did not supply');
       if (!SILA.claims.check(t, steps).ok) drop('claim', t, 'a claim that nothing in this turn backs');      // "your refund is approved", with no tool behind it
       if (!SILA.facts.check(t, known).ok) drop('fact', t, 'a statement the hotel data does not support');      // "the nightly rate includes VAT"
@@ -54,7 +57,7 @@
     function action(a, turn, facts) {
       const { input, state } = turn, b = state.booking, t = a && a.tool;
       if (typeof t !== 'string') return null;
-      if (t === 'clarify') return { say: 'free', text: words(a.question, 200, facts, [], knownOf(state)), intent: 'clarify', end: true };
+      if (t === 'clarify') return { say: 'free', text: words(a.question, 200, facts, [], knownOf(state), turn.lang), intent: 'clarify', end: true };
       if (o.flows && o.flows.includes(t)) return { say: 'flow', text: t, intent: FLOW[t], end: true };      // one of the chat window's own conversations
       if (!SILA.tools.has(t) || t === 'check_in') return null;
       let args = {}, intent = INTENT[t] || 'other';
@@ -83,7 +86,7 @@
     function planOf(out, turn, facts) {
       if (out && !Array.isArray(out.actions) && typeof out.tool === 'string') out = { actions: out.tool === 'none' ? [] : [out], reply: out.reply };      // a server one version behind answers with a single tool
       if (!out || !Array.isArray(out.actions)) fail('no plan');
-      if (!out.actions.length) return [{ say: 'free', text: words(out.reply, 600, facts, [], knownOf(turn.state)), intent: 'answer', end: true }];
+      if (!out.actions.length) return [{ say: 'free', text: words(out.reply, 600, facts, [], knownOf(turn.state), turn.lang), intent: 'answer', end: true }];
       const list = [], seen = [];
       let ask = null, flow = null;
       for (const a of out.actions.slice(0, MAX_ACTIONS)) {
@@ -110,7 +113,7 @@
         history: (turn.history || []).slice(-8).map(t => ({ guest: t.heard || '', agent: t.said || '' }))
       };
       for (let again = 0; ; again++) {               // an answer that does not fit is asked for once more; after that the rules take the turn
-        const out = await o.ask('agent', sent);
+        const out = await o.ask('agent', sent, turn.lang);
         try { return planOf(out, turn, [hotel, b ? b.room : '']); } catch (e) { if (e.soft || again) throw e; }
       }
     }
@@ -125,11 +128,11 @@
         if (!wording) return null;
         const results = t.steps.filter(s => s.tool).map(s => ({ action: s.tool, outcome: outcome(s), detail: String((s.result && s.result.note) || s.code || '') }));
         let out;
-        try { out = await o.ask('reply', { text: t.input.shown, results, said: t.said }); }
+        try { out = await o.ask('reply', { text: t.input.shown, results, said: t.said }, t.lang); }
         catch (e) { if (/ 400$/.test(String(e && e.message))) { wording = false; return null; } throw e; }      // a server one version behind: the fixed sentences stay
         const text = String((out && out.reply) || '').trim().slice(0, 600);
         if (!text) return null;
-        const why = !grounded(text, [t.said, results, t.facts]) ? 'number' : !SILA.claims.check(text, t.steps).ok ? 'claim' : !SILA.facts.check(text, { paid: t.paid, said: t.said }).ok ? 'fact' : null;
+        const why = !tongue(text, t.lang) ? 'language' : !grounded(text, [t.said, results, t.facts]) ? 'number' : !SILA.claims.check(text, t.steps).ok ? 'claim' : !SILA.facts.check(text, { paid: t.paid, said: t.said }).ok ? 'fact' : null;
         if (why && o.rejected) o.rejected(why, text);
         return why ? null : text;
       },

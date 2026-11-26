@@ -401,10 +401,12 @@ test.describe('F · understanding', () => {
       let s = await readStore(page, lang);
       expect(s.bookings.find(v => v.id === A).requests.length).toBe(0);
       expect(s.trail.some(e => e.tool === 'route_request')).toBe(false);
+      if (lang === 'en') await noArabic(page);
       await ask(page, 'el mokayef 5arban');                                             // Arabic in Latin letters, on either edition
       s = await readStore(page, lang);
       expect(s.tickets.length).toBe(1); expect(s.tickets[0].kind).toBe('maint');
-      if (lang === 'en') await noArabic(page);
+      await expect(page.locator('#feed .m.bot').last()).toContainText('414');           // the offered move,
+      expect(/[ء-ي]/.test(await page.locator('#feed .m.bot').last().textContent())).toBe(true);      // answered in Arabic: it is the language the guest wrote in, whatever the page's
       expect(errors).toEqual([]);
     });
 
